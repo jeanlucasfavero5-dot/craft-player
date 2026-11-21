@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Craft Player</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="cena"></canvas>
+
+<!-- TELA INICIAL -->
+<section id="tela-inicio" class="tela ativa">
+  <div class="perfil" id="perfil">
+    <div class="avatar" id="p-avatar">?</div>
+    <div class="dados">
+      <b id="p-nick">Carregando…</b>
+      <small>ID <span id="p-id">—</span></small>
+      <small class="dia">💎 <span id="p-diamantes">—</span></small>
+    </div>
+  </div>
+  <div class="centro">
+    <h1>CRAFT<span>PLAYER</span></h1>
+    <p class="sub">Sobreviva. Minere. Construa.</p>
+    <div class="menu">
+      <button data-ir="modos" class="btn primario">▶ Jogar</button>
+      <button data-ir="opcoes" class="btn">⚙ Opções</button>
+      <button id="btn-tela-cheia" class="btn">⛶ Tela cheia</button>
+    </div>
+  </div>
+  <small class="versao">v0.002A</small>
+</section>
+
+<!-- MODOS -->
+<section id="tela-modos" class="tela">
+  <header><button class="btn voltar" data-ir="inicio">← Voltar</button><h2>Modo de jogo</h2></header>
+  <div class="cards">
+    <button class="card" data-modo="offline"><i>🏕</i><b>Offline</b><span>Mundo local com progresso salvo na sua conta.</span></button>
+    <button class="card" data-modo="mapa"><i>🌍</i><b>Online — Mapa Aberto</b><span>Mundo compartilhado e persistente com outros jogadores.</span></button>
+    <button class="card" data-ir="sala"><i>🔑</i><b>Sala Personalizada</b><span>Crie ou entre numa sala com código.</span></button>
+  </div>
+  <p id="aviso-modos" class="aviso"></p>
+</section>
+
+<!-- SALA -->
+<section id="tela-sala" class="tela">
+  <header><button class="btn voltar" data-ir="modos">← Voltar</button><h2>Sala personalizada</h2></header>
+  <div class="painel dois">
+    <div>
+      <h3>Criar sala</h3>
+      <label>Nome<input id="s-nome" maxlength="32" placeholder="Minha sala"></label>
+      <label>Máx. jogadores<select id="s-max"><option>4</option><option selected>8</option><option>16</option><option>32</option></select></label>
+      <label class="chk"><input type="checkbox" id="s-publica"> Pública (aparece na lista)</label>
+      <button id="btn-criar" class="btn primario">Criar e entrar</button>
+    </div>
+    <div>
+      <h3>Entrar com código</h3>
+      <label>Código<input id="s-codigo" maxlength="8" placeholder="K7QX2M" style="text-transform:uppercase"></label>
+      <button id="btn-entrar" class="btn primario">Entrar</button>
+      <h3>Salas públicas <button id="btn-atualizar" class="btn mini">↻</button></h3>
+      <ul id="lista-salas" class="lista"></ul>
+    </div>
+  </div>
+  <p id="aviso-sala" class="aviso"></p>
+</section>
+
+<!-- OPÇÕES -->
+<section id="tela-opcoes" class="tela">
+  <header><button class="btn voltar" data-ir="voltar-opcoes">← Voltar</button><h2>Opções</h2></header>
+  <div class="painel">
+    <h3>Gráficos <small id="info-dispositivo"></small></h3>
+    <label>Qualidade
+      <select id="o-qualidade"><option value="auto">Automática</option><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option></select>
+    </label>
+    <h3>Controles</h3>
+    <label>Sensibilidade <output id="o-sens-v">1.0</output><input type="range" id="o-sens" min="0.2" max="3" step="0.1"></label>
+    <label class="chk"><input type="checkbox" id="o-invertY"> Inverter eixo Y</label>
+    <label class="so-touch">Controle de toque
+      <select id="o-touch"><option value="joystick">Joystick analógico</option><option value="dpad">Setas direcionais</option></select>
+    </label>
+    <h3>Áudio</h3>
+    <label>Geral <input type="range" id="o-vg" min="0" max="1" step="0.05"></label>
+    <label>Música / ambiente <input type="range" id="o-vm" min="0" max="1" step="0.05"></label>
+    <label>Efeitos <input type="range" id="o-ve" min="0" max="1" step="0.05"></label>
+    <button id="btn-salvar-opcoes" class="btn primario">Salvar</button>
+  </div>
+</section>
+
+<!-- JOGO / HUD -->
+<section id="tela-jogo" class="tela">
+  <div class="hud-topo">
+    <button class="btn mini" id="btn-pausa" title="Pausa (Esc)">☰</button>
+    <span id="hud-modo"></span>
+    <span id="hud-online"></span>
+    <span id="hud-hora">☀️ 08:00</span>
+    <span id="hud-fogo" class="oculto">🔥 Aquecendo</span>
+    <button class="btn mini" id="btn-salvar" title="Salvar (G)">💾</button>
+    <button class="btn mini" id="btn-mochila" title="Inventário (E)">🎒</button>
+    <span class="hud-dia">💎 <b id="hud-diamantes">0</b></span>
+  </div>
+  <div class="barras">
+    <div class="barra vida"><span>❤</span><div><i id="b-vida"></i></div></div>
+    <div class="barra en"><span>⚡</span><div><i id="b-en"></i></div></div>
+  </div>
+  <div id="mira">+</div>
+  <div id="alvo" class="oculto"><b id="alvo-nome"></b><div class="prog"><i id="alvo-prog"></i></div></div>
+  <div id="dica" class="oculto"></div>
+  <div id="toast"></div>
+  <div class="hotbar" id="hotbar"></div>
+
+  <div id="touch" class="oculto">
+    <div id="stick"><div id="knob"></div></div>
+    <div id="dpad" class="oculto"><button data-d="f">▲</button><button data-d="l">◀</button><button data-d="r">▶</button><button data-d="b">▼</button></div>
+    <button id="btn-acao" class="acao grande">⛏</button>
+    <button id="btn-pulo" class="acao pulo">⤒</button>
+    <button id="btn-demolir" class="acao lado2 oculto">🗑</button>
+  </div>
+
+  <!-- INVENTÁRIO / CRAFTING (tecla E) -->
+  <div id="inv" class="oculto">
+    <div class="painel inv-painel">
+      <div class="inv-topo"><h3>🎒 Mochila &amp; Crafting</h3><button class="btn mini" id="btn-fechar-inv">✕</button></div>
+      <div class="inv-corpo">
+        <div class="inv-col">
+          <h4>Hotbar <small>(toque no slot, depois no item)</small></h4>
+          <div class="hotbar fixa" id="inv-hotbar"></div>
+          <h4>Itens</h4>
+          <div id="inv-itens" class="itens"></div>
+        </div>
+        <div class="inv-col">
+          <h4>Crafting</h4>
+          <div id="inv-receitas" class="receitas"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pausa" class="oculto">
+    <div class="painel">
+      <h3>Pausado</h3>
+      <button class="btn primario" id="btn-continuar">Continuar</button>
+      <button class="btn" id="btn-salvar-pausa">💾 Salvar progresso</button>
+      <button class="btn" data-ir="opcoes-jogo">⚙ Opções</button>
+      <button class="btn" id="btn-sair">Salvar e sair para o menu</button>
+    </div>
+  </div>
+</section>
+
+<div id="girar" class="oculto">Gire o aparelho para a horizontal ↻</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
