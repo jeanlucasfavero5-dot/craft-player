@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Server } from 'socket.io';
 import { createClient } from '@supabase/supabase-js';
+import { Hostis, CICLO, ehNoite, DANO } from '../public/js/hostis.js';   // simulação compartilhada de criaturas hostis
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const {
@@ -26,13 +27,13 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: ALLOWED_ORIGIN } });
 
 // ---------- listas permitidas / utilidades ----------
-const ITENS_OK = new Set(['mao', 'madeira', 'tabua', 'pedra', 'ferro', 'diamante', 'machado_pedra', 'picareta_pedra', 'picareta_ferro', 'fogueira', 'fundacao', 'parede', 'rampa', 'bancada']);
+const ITENS_OK = new Set(['mao', 'madeira', 'tabua', 'pedra', 'ferro', 'diamante', 'machado_pedra', 'picareta_pedra', 'picareta_ferro', 'espada_madeira', 'espada_pedra', 'espada_ferro', 'fruta', 'carne_crua', 'carne_assada', 'cantil', 'cantil_cheio', 'fogueira', 'cama', 'fundacao', 'parede', 'rampa', 'bancada']);
 const LEGADO = { tronco: 'madeira', cristal: 'diamante' };   // migra saves da Fase 2 (nomes antigos)
-const PECAS_OK = new Set(['fundacao', 'parede', 'rampa', 'bancada', 'fogueira']);
-const MIN_DIST = { fundacao: 3.4, parede: .6, rampa: 3, bancada: 1.3, fogueira: 1.3 };   // mesma regra do cliente: evita peças sobrepostas
-const RESPAWN_S = { t: 180, r: 120, o: 300 };           // árvore, rocha, minério
+const PECAS_OK = new Set(['fundacao', 'parede', 'rampa', 'bancada', 'fogueira', 'cama']);
+const MIN_DIST = { fundacao: 3.4, parede: .6, rampa: 3, bancada: 1.3, fogueira: 1.3, cama: 1.6 };   // mesma regra do cliente: evita peças sobrepostas
+const RESPAWN_S = { t: 180, r: 120, o: 300, f: 150 };   // árvore, rocha, minério, arbusto de frutas
 const MAX_ESTRUTURAS = 600;
-const RE_RECURSO = /^[tro]\d{1,4}$/;
+const RE_RECURSO = /^[trof]\d{1,4}$/;
 const RE_ESTR = /^[el]\d{1,7}$/;
 
 const num = (v, def, min, max) => { v = Number(v); if (!Number.isFinite(v)) return def; return Math.min(max, Math.max(min, v)); };
@@ -149,7 +150,10 @@ async function salvarProgresso(req, res) {
     inventario: limpaInv(b.inventario),
     hotbar: limpaHotbar(b.hotbar),
     posicao: limpaPos(b.posicao),
-    stats: { vida: num(b.stats?.vida, 100, 0, 100), energia: num(b.stats?.energia, 100, 0, 100) },
+    stats: {
+      vida: num(b.stats?.vida, 100, 0, 100), fome: num(b.stats?.fome ?? b.stats?.energia, 100, 0, 100), sede: num(b.stats?.sede, 100, 0, 100),
+      respawn: b.stats?.respawn && typeof b.stats.respawn === 'object' ? { x: num(b.stats.respawn.x, 0, -600, 600), y: num(b.stats.respawn.y, 0, -50, 500), z: num(b.stats.respawn.z, 0, -600, 600) } : null,
+    },
     updated_at: new Date().toISOString(),
   };
   if (modos[b.modo]) linha.ultimo_modo = modos[b.modo];
@@ -161,6 +165,61 @@ async function salvarProgresso(req, res) {
 app.put('/api/progresso', auth, salvarProgresso);
 app.post('/api/progresso', auth, salvarProgresso);   // usado por navigator.sendBeacon ao fechar a aba
 
+// ---------- loja de diamantes / cosméticos (saldo e compras validados SOMENTE aqui, com a service key) ----------
+let catCache = { t: 0, itens: [] };
+async function catalogo() {
+  if (Date.now() - catCache.t < 30000) return catCache.itens;
+  const { data, error } = await sb.from('craft_catalogo').select('item_id,nome,tipo,preco_diamantes,raridade,meta').eq('ativo', true).order('preco_diamantes');
+  if (error) throw error;
+  catCache = { t: Date.now(), itens: data }; return data;
+}
+const SLOT_TIPO = { skin: 'skin', ferramenta: 'ferramenta', cosmetico: 'efeito' };
+async function equipadosDe(id) { const { data } = await sb.from('craft_progresso').select('equipados').eq('id_jogador', id).maybeSingle(); return { ...(data?.equipados || {}) }; }
+async function cosmeticosDe(id) {   // meta resolvida (cores/efeitos) para os outros jogadores renderizarem
+  const [cat, eq] = await Promise.all([catalogo(), equipadosDe(id)]), out = {};
+  for (const [slot, item] of Object.entries(eq)) { const c = cat.find(x => x.item_id === item); if (c) out[slot] = { id: c.item_id, ...(c.meta || {}) }; }
+  return out;
+}
+app.get('/api/loja', auth, async (req, res) => {
+  try {
+    const [cat, own, car, eq] = await Promise.all([
+      catalogo(),
+      sb.from('craft_itens_adquiridos').select('item_id').eq('id_jogador', req.jogadorId),
+      sb.from('carteira_diamantes').select('diamantes').eq('id_jogador', req.jogadorId).maybeSingle(),
+      equipadosDe(req.jogadorId),
+    ]);
+    res.json({ saldo: car.data?.diamantes ?? 0, catalogo: cat, adquiridos: (own.data || []).map(r => r.item_id), equipados: eq });
+  } catch { res.status(500).json({ erro: 'db' }); }
+});
+app.post('/api/loja/comprar', auth, async (req, res) => {
+  const item = String(req.body?.item_id || '');
+  if (!/^[a-z0-9_]{1,40}$/.test(item)) return res.status(400).json({ erro: 'item_invalido' });
+  const { data, error } = await sb.rpc('craft_comprar_item', { p_id_jogador: req.jogadorId, p_item_id: item });   // débito + registro atômicos
+  if (error) {
+    const erro = ['item_indisponivel', 'item_ja_adquirido', 'saldo_insuficiente'].find(k => (error.message || '').includes(k)) || 'db';
+    return res.status(erro === 'db' ? 500 : 400).json({ erro });
+  }
+  res.json({ ok: true, saldo: data });
+});
+app.post('/api/loja/equipar', auth, async (req, res) => {
+  try {
+    const slot = req.body?.slot, item = req.body?.item_id;
+    if (!['skin', 'ferramenta', 'efeito'].includes(slot)) return res.status(400).json({ erro: 'slot_invalido' });
+    const eq = await equipadosDe(req.jogadorId);
+    if (item === null || item === undefined) delete eq[slot];
+    else {
+      const cat = (await catalogo()).find(c => c.item_id === item);
+      if (!cat || SLOT_TIPO[cat.tipo] !== slot) return res.status(400).json({ erro: 'item_invalido' });
+      const { data } = await sb.from('craft_itens_adquiridos').select('item_id').eq('id_jogador', req.jogadorId).eq('item_id', item).maybeSingle();
+      if (!data) return res.status(403).json({ erro: 'nao_adquirido' });
+      eq[slot] = item;
+    }
+    const { error } = await sb.from('craft_progresso').upsert({ id_jogador: req.jogadorId, equipados: eq, updated_at: new Date().toISOString() }, { onConflict: 'id_jogador' });
+    if (error) throw error;
+    res.json({ equipados: eq });
+  } catch { res.status(500).json({ erro: 'db' }); }
+});
+
 app.get('/api/salas', async (_req, res) => {
   res.json([...salas.values()].filter(s => s.publica).map(resumoSala));
 });
@@ -170,7 +229,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // ---------- Salas / Mapa Aberto ----------
 const salas = new Map();
 const carregando = new Map();
-const novaSala = (base) => ({ ...base, jogadores: new Map(), mundo: { destruidos: {}, estruturas: [], proxId: 1 }, sujo: false, timers: new Map() });
+const novaSala = (base) => ({ ...base, jogadores: new Map(), mundo: { destruidos: {}, estruturas: [], proxId: 1 }, sujo: false, timers: new Map(), hostis: new Hostis() });
 const MAPA_ABERTO = novaSala({ codigo: 'MAPA_ABERTO', nome: 'Mapa Aberto', publica: true, max: 64, seed: 20261119, dono: null });
 salas.set(MAPA_ABERTO.codigo, MAPA_ABERTO);
 
@@ -227,6 +286,21 @@ await carregarMundo(MAPA_ABERTO);
 // salvamento periódico do mundo
 setInterval(() => { for (const s of salas.values()) if (s.sujo) { s.sujo = false; salvarMundo(s); } }, 20000);
 
+// criaturas hostis: servidor autoritativo (10 Hz) — gera à noite, persegue, ataca, foge de fogueiras e some ao amanhecer
+setInterval(() => {
+  const noite = ehNoite(((Date.now() / 1000) % CICLO) / CICLO);
+  for (const s of salas.values()) {
+    if (!s.jogadores.size) { if (s.hostis.lista.size) s.hostis.limpar(); continue; }
+    const est = s.mundo.estruturas;
+    s.hostis.update(.1, {
+      jogadores: [...s.jogadores.values()].map(j => ({ id: j.sid, x: j.x, z: j.z, vivo: j.vivo !== false })),
+      fogueiras: est.filter(e => e.tipo === 'fogueira'), paredes: est.filter(e => e.tipo === 'parede'), noite,
+      ataque: (sid, dano, k) => io.to(sid).emit('dano', { v: dano, k }), sumiu: () => {},
+    });
+    io.to(s.codigo).volatile.emit('hostis', s.hostis.snapshot());
+  }
+}, 100);
+
 const taxa = (socket, chave, ms) => {
   const n = Date.now(); socket.data.t ??= {};
   if (n - (socket.data.t[chave] || 0) < ms) return false;
@@ -266,7 +340,7 @@ io.on('connection', (socket) => {
     if (!idValido(id) || !assinaturaOk(id, t)) return ack?.({ erro: 'nao_autorizado' });
     const { data } = await sb.from('carteira_diamantes').select('id_jogador,nick').eq('id_jogador', id).maybeSingle();
     if (!data) return ack?.({ erro: 'jogador_nao_encontrado' });
-    eu = { id: data.id_jogador, nick: data.nick };
+    eu = { id: data.id_jogador, nick: data.nick, cos: await cosmeticosDe(data.id_jogador).catch(() => ({})) };
     ack?.({ ok: true });
   });
 
@@ -304,8 +378,8 @@ io.on('connection', (socket) => {
     const j = sala.jogadores.get(socket.id); if (!j) return;
     j.x = num(p?.x, 0, -5000, 5000); j.y = num(p?.y, 0, -500, 5000); j.z = num(p?.z, 0, -5000, 5000); j.ry = num(p?.ry, 0, -1e4, 1e4);
     j.f = typeof p?.f === 'string' && ITENS_OK.has(p.f) ? p.f : 'mao';
-    j.a = p?.a ? 1 : 0;
-    socket.to(sala.codigo).volatile.emit('mover', { sid: socket.id, x: j.x, y: j.y, z: j.z, ry: j.ry, f: j.f, a: j.a });
+    j.a = p?.a ? 1 : 0; j.v = num(p?.v, 100, 0, 100);
+    socket.to(sala.codigo).volatile.emit('mover', { sid: socket.id, x: j.x, y: j.y, z: j.z, ry: j.ry, f: j.f, a: j.a, v: j.v });
   });
 
   // recurso destruído (id determinístico t#/r#/o# gerado pela seed do mundo) -> regenera depois
@@ -345,6 +419,26 @@ io.on('connection', (socket) => {
     sala.mundo.estruturas.splice(i, 1); sala.sujo = true;
     io.to(sala.codigo).emit('estrutura:removida', { id });
     ack?.({ ok: true, tipo: e.tipo });
+  });
+
+  // golpe em criatura hostil: o DANO vem da tabela do servidor (arma equipada), validado por alcance e recarga
+  socket.on('atacar', ({ id } = {}, ack) => {
+    if (!sala || !eu) return ack?.({ erro: 'fora_da_sala' });
+    const j = sala.jogadores.get(socket.id); if (!j || j.vivo === false) return ack?.({ erro: 'morto' });
+    if (!taxa(socket, 'atacar', 280)) return ack?.({ erro: 'rapido_demais' });
+    const h = sala.hostis.lista.get(Number(id)); if (!h) return ack?.({ erro: 'inexistente' });
+    if ((h.x - j.x) ** 2 + (h.z - j.z) ** 2 > 4.8 ** 2) return ack?.({ erro: 'longe_demais' });
+    const r = sala.hostis.danificar(h.id, DANO[j.f] ?? 2);
+    io.to(sala.codigo).emit('hostil:golpe', { id: h.id, por: socket.id });
+    if (r?.morto) { io.to(sala.codigo).emit('hostil:morto', { id: h.id }); return ack?.({ ok: true, drops: r.drops }); }
+    ack?.({ ok: true });
+  });
+  socket.on('vivo', (v) => { const j = sala?.jogadores.get(socket.id); if (j) j.vivo = !!v; });   // jogador morto não é alvo
+  socket.on('cosmeticos:atualizar', async () => {   // relê o equipado do banco (não confia no cliente) e avisa a sala
+    if (!eu) return;
+    eu.cos = await cosmeticosDe(eu.id).catch(() => eu.cos || {});
+    const j = sala?.jogadores.get(socket.id); if (j) j.cos = eu.cos;
+    if (sala) io.to(sala.codigo).emit('cosmeticos', { sid: socket.id, cos: eu.cos });
   });
 
   socket.on('disconnect', sair);
