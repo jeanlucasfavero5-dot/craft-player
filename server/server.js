@@ -26,9 +26,10 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: ALLOWED_ORIGIN } });
 
 // ---------- listas permitidas / utilidades ----------
-const ITENS_OK = new Set(['mao', 'madeira', 'tabua', 'pedra', 'ferro', 'diamante', 'machado_pedra', 'picareta_pedra', 'picareta_ferro', 'fogueira']);
+const ITENS_OK = new Set(['mao', 'madeira', 'tabua', 'pedra', 'ferro', 'diamante', 'machado_pedra', 'picareta_pedra', 'picareta_ferro', 'fogueira', 'fundacao', 'parede', 'rampa', 'bancada']);
 const LEGADO = { tronco: 'madeira', cristal: 'diamante' };   // migra saves da Fase 2 (nomes antigos)
-const PECAS_OK = new Set(['fogueira']);
+const PECAS_OK = new Set(['fundacao', 'parede', 'rampa', 'bancada', 'fogueira']);
+const MIN_DIST = { fundacao: 3.4, parede: .6, rampa: 3, bancada: 1.3, fogueira: 1.3 };   // mesma regra do cliente: evita peças sobrepostas
 const RESPAWN_S = { t: 180, r: 120, o: 300 };           // árvore, rocha, minério
 const MAX_ESTRUTURAS = 600;
 const RE_RECURSO = /^[tro]\d{1,4}$/;
@@ -328,6 +329,7 @@ io.on('connection', (socket) => {
     const e = { tipo: d.tipo, x: num(d.x, NaN, -600, 600), y: num(d.y, NaN, -50, 500), z: num(d.z, NaN, -600, 600), ry: num(d.ry, 0, -100, 100) };
     if (!Number.isFinite(e.x) || !Number.isFinite(e.y) || !Number.isFinite(e.z)) return ack?.({ erro: 'posicao_invalida' });
     if (j && Math.hypot(e.x - j.x, e.z - j.z) > 16) return ack?.({ erro: 'longe_demais' });
+    for (const o of sala.mundo.estruturas) if (o.tipo === e.tipo && (o.x - e.x) ** 2 + (o.z - e.z) ** 2 < MIN_DIST[e.tipo] ** 2 && Math.abs(o.y - e.y) < 2.5) return ack?.({ erro: 'ocupado' });
     e.id = 'e' + (sala.mundo.proxId++); e.dono = eu.id;
     sala.mundo.estruturas.push(e); sala.sujo = true;
     io.to(sala.codigo).emit('estrutura:nova', e);
