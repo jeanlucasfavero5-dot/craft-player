@@ -97,3 +97,21 @@ h3{margin:1em 0 .2em;color:var(--verde)}h4{margin:.8em 0 .4em;opacity:.9}
 @media (pointer:fine){.so-touch{display:none}}
 @media (pointer:coarse){.slot{width:2.9em;height:2.9em}.hotbar{bottom:max(6px,env(safe-area-inset-bottom))}}
 @media (max-height:480px){h1{font-size:2.2rem}.sub{margin-bottom:.6em}.menu{flex-direction:row;flex-wrap:wrap;justify-content:center}.menu .btn{min-width:0}.barras{top:calc(max(10px,env(safe-area-inset-top)) + 2.6em)}.acao.grande{bottom:max(60px,calc(env(safe-area-inset-bottom) + 50px))}.acao.lado,.acao.lado2{bottom:max(150px,calc(env(safe-area-inset-bottom) + 140px))}}
+
+/* ---------- Fase 3: sobrevivência, dano, morte, loja ---------- */
+.barra.baixo{animation:pisca 1s infinite}
+@keyframes pisca{50%{opacity:.45}}
+.barra.fome i{background:linear-gradient(90deg,#c97a2a,#ffb36b)}.barra.sede i{background:linear-gradient(90deg,#2a7fc9,#7ad0ff)}
+#dano-fx{position:absolute;inset:0;pointer-events:none!important;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at center,rgba(255,0,0,0) 35%,rgba(220,20,20,.65) 100%)}
+#dano-fx.on{opacity:1;transition:none}
+#morte{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:rgba(40,0,0,.72)}
+#morte .painel{display:flex;flex-direction:column;gap:.6em;max-width:22em;margin:0;text-align:center}
+#morte h3{color:#ff7a6e;font-size:1.4em;margin:0}
+#tela-loja{z-index:30;background:rgba(5,10,8,.88)}
+#tela-loja header{flex-wrap:wrap}.saldo{margin-left:auto;background:var(--vidro);border:1px solid var(--borda);border-radius:12px;padding:.4em .9em;color:var(--dia);font-weight:700}
+.abas{display:flex;gap:.4em;margin-bottom:.8em}.aba.ativa{border-color:var(--verde);background:rgba(95,191,106,.2)}
+.loja-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,13em),1fr));gap:.7em;align-content:start;padding-bottom:1em}
+.loja-card{display:flex;flex-direction:column;gap:.35em;background:var(--vidro);border:1px solid var(--borda);border-radius:14px;padding:.8em}
+.loja-card small{opacity:.75;text-transform:capitalize}.loja-card .btn{margin-top:.3em}
+.chips{display:flex;gap:.3em;height:2.4em}.chips i{flex:1;border-radius:8px;border:1px solid rgba(255,255,255,.25)}
+.r-raro{border-color:#4aa8ff}.r-epico{border-color:#b46bff}.r-lendario{border-color:#ffd24a;box-shadow:0 0 12px rgba(255,210,74,.35)}.r-incomum{border-color:#5fbf6a}
