@@ -1,6 +1,6 @@
 {
   "name": "craft-player",
-  "version": "0.002.0",
+  "version": "0.003.0",
   "private": true,
   "type": "module",
   "scripts": { "start": "node server/server.js", "dev": "node --watch server/server.js" },
