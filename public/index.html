@@ -24,11 +24,12 @@
     <p class="sub">Sobreviva. Minere. Construa.</p>
     <div class="menu">
       <button data-ir="modos" class="btn primario">▶ Jogar</button>
+      <button id="btn-loja-inicio" class="btn">🛒 Loja de Diamantes</button>
       <button data-ir="opcoes" class="btn">⚙ Opções</button>
       <button id="btn-tela-cheia" class="btn">⛶ Tela cheia</button>
     </div>
   </div>
-  <small class="versao">v0.002B</small>
+  <small class="versao">v0.003</small>
 </section>
 
 <!-- MODOS -->
@@ -86,6 +87,18 @@
   </div>
 </section>
 
+<!-- LOJA DE DIAMANTES (WaveCombat Hub) -->
+<section id="tela-loja" class="tela">
+  <header><button class="btn voltar" id="btn-fechar-loja">← Voltar</button><h2>🛒 Loja de Diamantes</h2><span class="saldo">💎 <b id="loja-saldo">—</b></span></header>
+  <div class="abas">
+    <button class="btn mini aba ativa" data-aba="skin">Skins</button>
+    <button class="btn mini aba" data-aba="ferramenta">Ferramentas</button>
+    <button class="btn mini aba" data-aba="cosmetico">Efeitos</button>
+  </div>
+  <div id="loja-grid" class="loja-grid"></div>
+  <p id="loja-aviso" class="aviso"></p>
+</section>
+
 <!-- JOGO / HUD -->
 <section id="tela-jogo" class="tela">
   <div class="hud-topo">
@@ -95,18 +108,29 @@
     <span id="hud-hora">☀️ 08:00</span>
     <span id="hud-fogo" class="oculto">🔥 Aquecendo</span>
     <button class="btn mini" id="btn-salvar" title="Salvar (G)">💾</button>
+    <button class="btn mini" id="btn-loja" title="Loja (L)">🛒</button>
     <button class="btn mini" id="btn-constr" title="Construir (B)">🏗</button>
     <button class="btn mini" id="btn-mochila" title="Inventário (E)">🎒</button>
     <span class="hud-dia">💎 <b id="hud-diamantes">0</b></span>
   </div>
   <div class="barras">
     <div class="barra vida"><span>❤</span><div><i id="b-vida"></i></div></div>
-    <div class="barra en"><span>⚡</span><div><i id="b-en"></i></div></div>
+    <div class="barra fome"><span>🍖</span><div><i id="b-fome"></i></div></div>
+    <div class="barra sede"><span>💧</span><div><i id="b-sede"></i></div></div>
   </div>
   <div id="mira">+</div>
   <div id="alvo" class="oculto"><b id="alvo-nome"></b><div class="prog"><i id="alvo-prog"></i></div></div>
   <div id="dica" class="oculto"></div>
   <div id="toast"></div>
+  <div id="dano-fx"></div>
+  <div id="morte" class="oculto">
+    <div class="painel">
+      <h3>☠ Você morreu</h3>
+      <p id="morte-causa"></p>
+      <button class="btn primario" id="btn-renasc-spawn">Renascer no spawn</button>
+      <button class="btn" id="btn-renasc-fog">🔥 Renascer na última fogueira/cama</button>
+    </div>
+  </div>
   <div id="menu-constr" class="oculto"></div>
   <div class="hotbar" id="hotbar"></div>
 
@@ -143,6 +167,7 @@
       <h3>Pausado</h3>
       <button class="btn primario" id="btn-continuar">Continuar</button>
       <button class="btn" id="btn-salvar-pausa">💾 Salvar progresso</button>
+      <button class="btn" id="btn-loja-pausa">🛒 Loja de Diamantes</button>
       <button class="btn" data-ir="opcoes-jogo">⚙ Opções</button>
       <button class="btn" id="btn-sair">Salvar e sair para o menu</button>
     </div>
