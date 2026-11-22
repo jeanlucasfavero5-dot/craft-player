@@ -93,11 +93,17 @@ function slotHTML(i) {
 function renderHotbar() {
   const h = Array.from({ length: 8 }, (_, i) => slotHTML(i)).join('');
   $('#hotbar').innerHTML = h; $('#inv-hotbar').innerHTML = h;
+  if (!$('#menu-constr').classList.contains('oculto')) renderConstr();
 }
 function selecionaSlot(i) { sel = (i + 8) % 8; equipa(); }
 for (const alvo of ['#hotbar', '#inv-hotbar']) {
   const el = $(alvo);
   el.addEventListener('pointerdown', (e) => { const s = e.target.closest('.slot'); if (!s) return; e.preventDefault(); selecionaSlot(+s.dataset.i); });
+}
+function colocaNaHotbar(item) {   // equipa no slot selecionado (sem perder a Mão do slot 1)
+  hotbar = hotbar.map(h => (h === item ? null : h));
+  let i = sel; if (hotbar[sel] === 'mao') { const l = hotbar.indexOf(null); if (l >= 0) i = l; }
+  hotbar[i] = item; sel = i; renderHotbar(); equipa();
 }
 function autoHotbar(item) {
   const t = ITENS[item].t; if (t === 'recurso' || hotbar.includes(item)) return;
@@ -127,7 +133,7 @@ function renderInv() {
 $('#inv-itens').addEventListener('click', (e) => {
   const b = e.target.closest('[data-item]'); if (!b) return; const it = b.dataset.item, t = ITENS[it].t;
   if (t === 'recurso') return toast('Recurso de crafting — não vai na hotbar');
-  hotbar = hotbar.map(h => (h === it ? null : h)); hotbar[sel] = it; renderInv();
+  colocaNaHotbar(it); renderInv();
 });
 $('#inv-receitas').addEventListener('click', (e) => {
   const b = e.target.closest('[data-craft]'); if (!b) return; const r = RECEITAS.find(x => x.id === b.dataset.craft); if (!r) return;
@@ -138,7 +144,7 @@ $('#inv-receitas').addEventListener('click', (e) => {
   world.som.coletar(); toast('Fabricado: ' + ITENS[Object.keys(r.sai)[0]].nome);
 });
 function abrirInv(v) {
-  if (!emJogo) return; invAberto = v;
+  if (!emJogo) return; invAberto = v; if (v) toggleConstr(false);
   $('#inv').classList.toggle('oculto', !v); world.parado = v || !$('#pausa').classList.contains('oculto');
   if (v) { document.exitPointerLock?.(); renderInv(); world.pressAcao(false); }
   else if (!mobile && $('#pausa').classList.contains('oculto')) world.canvas.requestPointerLock?.();
@@ -146,11 +152,29 @@ function abrirInv(v) {
 $('#btn-mochila').onclick = () => abrirInv(!invAberto);
 $('#btn-fechar-inv').onclick = () => abrirInv(false);
 
+// ---------- menu de construção (tecla B / botão 🏗) ----------
+function renderConstr() {
+  $('#menu-constr').innerHTML = PECAS.map(k => `<button class="item${qtd(k) ? '' : ' vazio'}" data-peca="${k}"><span class="ic">${ITENS[k].ic}</span><b>${ITENS[k].nome}</b><em>${qtd(k)}</em></button>`).join('');
+}
+function toggleConstr(v) {
+  const el = $('#menu-constr'); if (v === undefined) v = el.classList.contains('oculto');
+  if (v && (!emJogo || invAberto)) return;
+  el.classList.toggle('oculto', !v);
+  if (v) { renderConstr(); if (!mobile) { world.parado = true; document.exitPointerLock?.(); world.pressAcao(false); } }
+  else if (!mobile && emJogo && $('#pausa').classList.contains('oculto')) { world.parado = false; world.canvas.requestPointerLock?.(); }
+}
+$('#btn-constr').onclick = () => toggleConstr();
+$('#menu-constr').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-peca]'); if (!b) return; const k = b.dataset.peca;
+  if (!qtd(k)) { world.som.erro(); return toast('Sem peças — fabrique no inventário (E)'); }
+  colocaNaHotbar(k); toggleConstr(false);
+});
+
 // ---------- HUD ----------
 world.onHud = (h) => {
   const a = $('#alvo'); a.classList.toggle('oculto', !h.alvo); $('#alvo-nome').textContent = h.alvo; $('#alvo-prog').style.width = h.prog + '%';
   $('#dica').textContent = h.dica; $('#dica').classList.toggle('oculto', !h.dica);
-  $('#btn-demolir').classList.toggle('oculto', !h.demolivel);
+  $('#btn-girar').classList.toggle('oculto', !h.construindo); $('#btn-demolir').classList.toggle('oculto', !h.demolivel);
 };
 const fmtHora = () => { const f = world.fase * 24, h = Math.floor(f), m = Math.floor((f - h) * 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`; };
 function atualizaStats() {
@@ -188,6 +212,7 @@ function aplicaControlesTouch() {
   const seg = (el, ini, fim) => { el.addEventListener('touchstart', e => { e.preventDefault(); ini(); }, { passive: false }); if (fim) { el.addEventListener('touchend', fim); el.addEventListener('touchcancel', fim); } };
   seg($('#btn-pulo'), () => { world.input.pulo = true; }, () => { world.input.pulo = false; });
   seg($('#btn-acao'), () => world.pressAcao(true), () => world.pressAcao(false));
+  seg($('#btn-girar'), () => world.girarGhost());
   seg($('#btn-demolir'), () => world.demolirAlvo());
 })();
 
@@ -203,7 +228,7 @@ world.onConstruir = (d) => {
   if (modoAtual === 'offline') { world.addEstrutura({ ...d, id: 'l' + contLocal++, dono: jogador.id }); consome(d.tipo); return true; }
   if (!socket?.connected) { toast('Sem conexão com a sala'); return false; }
   consome(d.tipo);
-  socket.emit('construir', d, (r) => { if (r?.erro) { add(d.tipo, 1); toast('Não foi possível construir (' + r.erro + ')'); } });
+  socket.emit('construir', d, (r) => { if (r?.erro) { add(d.tipo, 1); toast(({ ocupado: 'Já existe uma peça aqui', longe_demais: 'Longe demais', limite_estruturas: 'Limite de estruturas da sala' })[r.erro] || 'Não foi possível construir (' + r.erro + ')'); } });
   return true;
 };
 world.onDemolir = (s) => {
@@ -221,13 +246,14 @@ function montaPayload() {
     mundo_offline: modoAtual === 'offline' ? world.estadoMundo() : undefined,
   };
 }
+function flashSalvo(ok) { const b = $('#btn-salvar'); b.classList.add(ok ? 'ok' : 'erro'); setTimeout(() => b.classList.remove('ok', 'erro'), 1200); }
 async function salvar(manual) {
   if (!jogador.id || salvando || !emJogo) return;
   salvando = true;
   const p = montaPayload();
   if (p.mundo_offline) localStorage.setItem('cp_mundo_' + jogador.id, JSON.stringify(p.mundo_offline));
-  try { await api('/api/progresso', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }); if (manual) toast('💾 Progresso salvo'); }
-  catch (e) { if (manual) toast('Falha ao salvar: ' + e.message); }
+  try { await api('/api/progresso', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }); flashSalvo(true); if (manual) toast('💾 Progresso salvo'); }
+  catch (e) { flashSalvo(false); if (manual) toast('Falha ao salvar: ' + e.message); }
   salvando = false;
 }
 setInterval(() => salvar(false), 30000);
@@ -247,7 +273,7 @@ function entrarJogo(rotulo, seed, opts) {
 async function sairJogo() {
   await salvar(false);
   world.setMenu(); world.limparRemotos(); world.onMove = null; world.parado = false; invAberto = false; emJogo = false;
-  socket?.emit('sala:sair'); $('#hud-online').textContent = ''; $('#pausa').classList.add('oculto'); $('#inv').classList.add('oculto'); checaOrientacao(); ir('inicio');
+  sessao = null; socket?.emit('sala:sair'); $('#hud-online').textContent = ''; $('#pausa').classList.add('oculto'); $('#inv').classList.add('oculto'); checaOrientacao(); ir('inicio');
 }
 function modoOffline() {
   modoAtual = 'offline';
@@ -256,20 +282,33 @@ function modoOffline() {
   world.aplicarMundo(m || {});
   contLocal = 1 + Math.max(0, ...(m?.estruturas || []).map(e => parseInt(String(e.id).slice(1), 10) || 0));
 }
+let sessao = null;   // {evento,payload} da sala atual -> usada para reentrar após queda de conexão
+function reentrar() {
+  if (!emJogo || !sessao) return;
+  socket.emit(sessao.evento, sessao.payload, (r) => {
+    if (r?.erro) { toast('Não foi possível voltar à sala (' + r.erro + ')'); sairJogo(); return; }
+    world.limparRemotos(); nOnline = r.jogadores.length + 1; $('#hud-online').textContent = `👥 ${nOnline}`;
+    world.aplicarMundo(r.mundo); r.jogadores.forEach(j => world.upsertRemoto(j.sid, j, j.nick)); toast('🔄 Reconectado');
+  });
+}
 function conectar() {
   return new Promise((res, rej) => {
     if (socket?.connected) return res(socket);
     if (!jogador.id) return rej(new Error('Jogador não identificado — abra pelo hub.'));
-    socket = io();
-    socket.on('connect_error', () => rej(new Error('Servidor indisponível')));
-    socket.on('connect', () => socket.emit('identificar', { id: jogador.id, t: jogador.t }, (r) => r?.ok ? res(socket) : rej(new Error(r?.erro || 'falha'))));
-    socket.on('sala:entrou', (j) => { world.upsertRemoto(j.sid, { x: 0, y: 1.7, z: 0 }, j.nick); atualizaOnline(1); });
-    socket.on('sala:saiu', ({ sid }) => { world.removeRemoto(sid); atualizaOnline(-1); });
-    socket.on('mover', (m) => world.upsertRemoto(m.sid, m));
-    socket.on('recurso:estado', ({ id, vivo }) => world.setRecursoVivo(id, vivo));
-    socket.on('estrutura:nova', (e) => world.addEstrutura(e));
-    socket.on('estrutura:removida', ({ id }) => world.removerEstrutura(id));
-    socket.on('disconnect', () => { if (emJogo && modoAtual !== 'offline') toast('Conexão perdida'); });
+    socket?.close(); const s = io(); socket = s; let primeira = true;
+    const falha = (msg) => { if (!primeira) return; primeira = false; s.close(); if (socket === s) socket = null; rej(new Error(msg)); };
+    s.on('connect_error', () => falha('Servidor indisponível'));
+    s.on('connect', () => s.emit('identificar', { id: jogador.id, t: jogador.t }, (r) => {
+      if (!r?.ok) return falha(r?.erro || 'falha');
+      if (primeira) { primeira = false; res(s); } else reentrar();
+    }));
+    s.on('sala:entrou', (j) => { world.upsertRemoto(j.sid, { x: 0, y: 1.7, z: 0 }, j.nick); atualizaOnline(1); });
+    s.on('sala:saiu', ({ sid }) => { world.removeRemoto(sid); atualizaOnline(-1); });
+    s.on('mover', (m) => world.upsertRemoto(m.sid, m));
+    s.on('recurso:estado', ({ id, vivo }) => world.setRecursoVivo(id, vivo));
+    s.on('estrutura:nova', (e) => world.addEstrutura(e));
+    s.on('estrutura:removida', ({ id }) => world.removerEstrutura(id));
+    s.on('disconnect', () => { if (emJogo && modoAtual !== 'offline') toast('Conexão perdida — reconectando…'); });
   });
 }
 let nOnline = 0; const atualizaOnline = (d) => { nOnline = Math.max(1, nOnline + d); $('#hud-online').textContent = `👥 ${nOnline}`; };
@@ -278,7 +317,7 @@ async function entrarOnline(evento, payload, rotulo, aviso, chaveModo) {
     await conectar();
     socket.emit(evento, payload, (r) => {
       if (r?.erro) { $(aviso).textContent = ({ sala_cheia: 'Sala cheia.', sala_inexistente: 'Sala não encontrada.' })[r.erro] || r.erro; return; }
-      modoAtual = chaveModo; nOnline = r.jogadores.length + 1; $('#hud-online').textContent = `👥 ${nOnline}`;
+      modoAtual = chaveModo; sessao = r.sala.codigo === 'MAPA_ABERTO' ? { evento: 'mapa:entrar', payload: {} } : { evento: 'sala:entrar', payload: { codigo: r.sala.codigo } }; nOnline = r.jogadores.length + 1; $('#hud-online').textContent = `👥 ${nOnline}`;
       const salvaOk = chaveModo === 'mapa' ? posSalva(r.seed) : null;
       entrarJogo(rotulo + (r.sala.codigo !== 'MAPA_ABERTO' ? ` · ${r.sala.codigo}` : ''), r.seed, { offline: false, agora: r.agora, pos: salvaOk });
       world.aplicarMundo(r.mundo);
@@ -311,8 +350,9 @@ $('#btn-continuar').onclick = () => { pausar(false); if (!mobile) world.canvas.r
 $('#btn-sair').onclick = sairJogo;
 addEventListener('keydown', (e) => {
   if (!emJogo || e.target.closest?.('input,select,textarea')) return;
-  if (e.code === 'Escape') { if (invAberto) abrirInv(false); else if (!$('#tela-opcoes').classList.contains('ativa')) pausar(!world.parado); return; }
+  if (e.code === 'Escape') { if (!$('#menu-constr').classList.contains('oculto')) toggleConstr(false); else if (invAberto) abrirInv(false); else if (!$('#tela-opcoes').classList.contains('ativa')) pausar(!world.parado); return; }
   if (e.code === 'KeyE') { if ($('#pausa').classList.contains('oculto')) abrirInv(!invAberto); return; }
+  if (e.code === 'KeyB') { if (!invAberto && $('#pausa').classList.contains('oculto')) toggleConstr(); return; }
   if (e.code === 'KeyG') { salvar(true); return; }
   const m = /^Digit([1-8])$/.exec(e.code); if (m && !invAberto && !world.parado) selecionaSlot(+m[1] - 1);
 });
