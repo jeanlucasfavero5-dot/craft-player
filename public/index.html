@@ -28,7 +28,7 @@
       <button id="btn-tela-cheia" class="btn">⛶ Tela cheia</button>
     </div>
   </div>
-  <small class="versao">v0.002A</small>
+  <small class="versao">v0.002B</small>
 </section>
 
 <!-- MODOS -->
@@ -95,6 +95,7 @@
     <span id="hud-hora">☀️ 08:00</span>
     <span id="hud-fogo" class="oculto">🔥 Aquecendo</span>
     <button class="btn mini" id="btn-salvar" title="Salvar (G)">💾</button>
+    <button class="btn mini" id="btn-constr" title="Construir (B)">🏗</button>
     <button class="btn mini" id="btn-mochila" title="Inventário (E)">🎒</button>
     <span class="hud-dia">💎 <b id="hud-diamantes">0</b></span>
   </div>
@@ -106,6 +107,7 @@
   <div id="alvo" class="oculto"><b id="alvo-nome"></b><div class="prog"><i id="alvo-prog"></i></div></div>
   <div id="dica" class="oculto"></div>
   <div id="toast"></div>
+  <div id="menu-constr" class="oculto"></div>
   <div class="hotbar" id="hotbar"></div>
 
   <div id="touch" class="oculto">
@@ -113,6 +115,7 @@
     <div id="dpad" class="oculto"><button data-d="f">▲</button><button data-d="l">◀</button><button data-d="r">▶</button><button data-d="b">▼</button></div>
     <button id="btn-acao" class="acao grande">⛏</button>
     <button id="btn-pulo" class="acao pulo">⤒</button>
+    <button id="btn-girar" class="acao lado oculto">⟳</button>
     <button id="btn-demolir" class="acao lado2 oculto">🗑</button>
   </div>
 
