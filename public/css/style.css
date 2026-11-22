@@ -84,6 +84,10 @@ h3{margin:1em 0 .2em;color:var(--verde)}h4{margin:.8em 0 .4em;opacity:.9}
 .acao.grande{right:max(28px,env(safe-area-inset-right));bottom:max(70px,calc(env(safe-area-inset-bottom) + 60px));width:5.2em;height:5.2em;font-size:1.5em}
 .acao.pulo{right:max(120px,calc(env(safe-area-inset-right) + 110px));bottom:max(28px,env(safe-area-inset-bottom));width:4em;height:4em;font-size:1.3em;background:rgba(255,255,255,.22)}
 .acao.lado2{right:max(110px,calc(env(safe-area-inset-right) + 100px));bottom:max(190px,calc(env(safe-area-inset-bottom) + 180px));width:3.6em;height:3.6em;font-size:1.2em;background:rgba(255,90,90,.4)}
+.acao.lado{right:max(28px,env(safe-area-inset-right));bottom:max(190px,calc(env(safe-area-inset-bottom) + 180px));width:3.6em;height:3.6em;font-size:1.2em;background:rgba(80,150,255,.4)}
+#menu-constr{position:absolute;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 4em);left:50%;transform:translateX(-50%);display:flex;gap:.4em;background:var(--vidro);border:1px solid var(--borda);padding:.4em;border-radius:12px;max-width:96vw;overflow-x:auto}
+#menu-constr .item{min-width:5.6em}.item.vazio{opacity:.45}
+.btn.ok{border-color:var(--verde);box-shadow:0 0 8px var(--verde)}.btn.erro{border-color:#e0443e;box-shadow:0 0 8px #e0443e}
 #pausa{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55)}
 #pausa .painel{display:flex;flex-direction:column;gap:.6em;max-width:20em;margin:0}
 .oculto{display:none!important}
