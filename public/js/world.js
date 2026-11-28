@@ -27,10 +27,13 @@ export const ITENS = {
   cama:           { nome: 'Cama', ic: '🛏️', t: 'peca' },
   fundacao:       { nome: 'Fundação de Madeira', ic: '⬛', t: 'peca' },
   parede:         { nome: 'Parede de Madeira', ic: '🧱', t: 'peca' },
+  porta:          { nome: 'Parede com Porta', ic: '🚪', t: 'peca' },
   rampa:          { nome: 'Rampa / Telhado', ic: '📐', t: 'peca' },
   bancada:        { nome: 'Bancada de Trabalho', ic: '🛠️', t: 'peca' },
+  bau:            { nome: 'Baú de Madeira', ic: '📦', t: 'peca' },
+  totem:          { nome: 'Totem de Território', ic: '🗿', t: 'peca' },
 };
-export const PECAS = ['fundacao', 'parede', 'rampa', 'bancada', 'fogueira', 'cama'];
+export const PECAS = ['fundacao', 'parede', 'porta', 'rampa', 'bancada', 'bau', 'totem', 'fogueira', 'cama'];
 // efeito ao consumir (fome/sede/vida); "volta" = item devolvido
 export const CONSUMIVEL = {
   fruta:        { fome: 14, sede: 6,  vida: 0 },
@@ -81,18 +84,23 @@ export const RECEITAS = [
   { id: 'espada_pedra',   sai: { espada_pedra: 1 },   custo: { madeira: 1, pedra: 3 } },
   { id: 'espada_ferro',   sai: { espada_ferro: 1 },   custo: { madeira: 1, ferro: 3 } },
   { id: 'cantil',         sai: { cantil: 1 },         custo: { madeira: 2, pedra: 1 } },
+  { id: 'porta',          sai: { porta: 1 },          custo: { tabua: 4 } },
+  { id: 'bau',            sai: { bau: 1 },            custo: { tabua: 6, madeira: 2 }, bancada: true },
+  { id: 'totem',          sai: { totem: 1 },          custo: { pedra: 6, tabua: 4, diamante: 1 }, bancada: true },
 ];
 
 const QUALIDADE = {
-  baixa: { pr: 1,   sombra: false, seg: 110, far: 170, dec: 250, fog: .0105 },
-  media: { pr: 1.5, sombra: true,  seg: 180, far: 260, dec: 500, fog: .0078 },
-  alta:  { pr: 2,   sombra: true,  seg: 240, far: 340, dec: 900, fog: .0062 },
+  baixa: { pr: 1,   sombra: false, seg: 110, far: 170, dec: 250, grama: 0, fog: .0105 },
+  media: { pr: 1.5, sombra: true,  seg: 180, far: 260, dec: 500, grama: 2200, fog: .0078 },
+  alta:  { pr: 2,   sombra: true,  seg: 240, far: 340, dec: 900, grama: 5200, fog: .0062 },
 };
 export const detectaMobile = () => matchMedia('(pointer:coarse)').matches || /Android|iPhone|iPad/i.test(navigator.userAgent);
 export const qualidadeAuto = () => (detectaMobile() ? 'baixa' : 'alta');
 
 const ALC = 5.2;          // alcance de coleta
 const AGUA = 0;           // nível da água
+const H_PAREDE = 3.2;     // altura das paredes (folga para o jogador de 1,8 m passar sob o teto)
+const PAREDES = new Set(['parede', 'porta']);
 
 /* =====================================================================
    RUÍDO / TERRENO (determinístico: mesmo seed => mesmo mundo em todos os clientes)
@@ -224,6 +232,11 @@ const geoCristal = () => {
   return fundir(partes);
 };
 const geoArbusto = () => fundir([[organico(new THREE.IcosahedronGeometry(.7, 1), .38, 5).scale(1.2, .8, 1.2).translate(0, .4, 0), 0x36672a]]);
+const geoGrama = () => {
+  const Pp = [], Cc = [];
+  for (let k = 0; k < 3; k++) { const a = k * 1.0472, c = Math.cos(a) * .07, sn = Math.sin(a) * .07, h = .38 + k * .07; Pp.push(-c, 0, -sn, c, 0, sn, 0, h, 0); Cc.push(.14, .34, .1, .14, .34, .1, .45, .72, .28); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(Pp, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 3)); g.computeVertexNormals(); return g;
+};
 const geoFruta = () => {
   const partes = [[organico(new THREE.IcosahedronGeometry(.7, 1), .38, 6).scale(1.15, .8, 1.15).translate(0, .42, 0), 0x2f6b2b]];
   for (let i = 0; i < 9; i++) { const a = i * 2.4, r = .62 + (i % 3) * .08; partes.push([new THREE.IcosahedronGeometry(.075, 0).translate(Math.cos(a) * r, .35 + (i % 4) * .16, Math.sin(a) * r), 0xc4162c]); }
@@ -275,7 +288,22 @@ function meshPeca(tipo) {
   const g = new THREE.Group(), mad = matMad();
   const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; g.add(m); return m; };
   if (tipo === 'fundacao') add(new THREE.BoxGeometry(4, 1.5, 4), mad, 0, -.75, 0);
-  else if (tipo === 'parede') add(new THREE.BoxGeometry(4, 3, .25), mad, 0, 1.5, 0);
+  else if (tipo === 'parede') add(new THREE.BoxGeometry(4, H_PAREDE, .25), mad, 0, H_PAREDE / 2, 0);
+  else if (tipo === 'porta') {   // vão de 1,4 m x 2,3 m
+    add(new THREE.BoxGeometry(1.3, H_PAREDE, .25), mad, -1.35, H_PAREDE / 2, 0); add(new THREE.BoxGeometry(1.3, H_PAREDE, .25), mad, 1.35, H_PAREDE / 2, 0);
+    add(new THREE.BoxGeometry(1.4, H_PAREDE - 2.3, .25), mad, 0, 2.3 + (H_PAREDE - 2.3) / 2, 0);
+  }
+  else if (tipo === 'bau') {
+    add(new THREE.BoxGeometry(1, .5, .7), mad, 0, .25, 0); add(new THREE.BoxGeometry(1.02, .24, .72), mad, 0, .62, 0);
+    const ferro = new THREE.MeshStandardMaterial({ color: 0x3a3a3f, roughness: .5, metalness: .6 });
+    for (const x of [-.32, .32]) add(new THREE.BoxGeometry(.08, .78, .74), ferro, x, .39, 0);
+    add(new THREE.BoxGeometry(.14, .16, .06), new THREE.MeshStandardMaterial({ color: 0xd9b14a, roughness: .4, metalness: .7 }), 0, .55, .37);
+  }
+  else if (tipo === 'totem') {
+    add(new THREE.CylinderGeometry(.42, .52, .45, 8), new THREE.MeshStandardMaterial({ color: 0x77736c, roughness: 1 }), 0, .22, 0);
+    add(new THREE.CylinderGeometry(.2, .26, 1.7, 8), mad, 0, 1.3, 0);
+    add(new THREE.OctahedronGeometry(.24, 0), new THREE.MeshStandardMaterial({ color: 0x44ffee, emissive: 0x22ccbb, emissiveIntensity: 1 }), 0, 2.4, 0).castShadow = false;
+  }
   else if (tipo === 'rampa') { const m = add(new THREE.BoxGeometry(4, .2, 4.472), mad, 0, 1, 0); m.rotation.x = -Math.atan(.5); }
   else if (tipo === 'bancada') {
     add(new THREE.BoxGeometry(1.6, .12, .9), mad, 0, .9, 0);
@@ -309,6 +337,7 @@ function modeloCervo() {
   add(new THREE.SphereGeometry(.12, 7, 6), 0xf3ece0, 0, 1.3, -.75);
   for (const s of [-1, 1]) { const h = add(new THREE.CylinderGeometry(.015, .025, .5, 5), 0xd9c9a3, s * .1, 2.2, .95); h.rotation.z = -s * .4; const h2 = add(new THREE.CylinderGeometry(.012, .018, .28, 5), 0xd9c9a3, s * .2, 2.35, .95); h2.rotation.z = -s * .9; }
   for (const [x, z] of [[-.2, .6], [.2, .6], [-.2, -.55], [.2, -.55]]) { const p = new THREE.Group(); p.position.set(x, .95, z); const l = new THREE.Mesh(new THREE.CylinderGeometry(.045, .035, .95, 6), M(0x6f4624)); l.position.y = -.47; l.castShadow = true; p.add(l); g.add(p); pernas.push(p); }
+  pernas.forEach((p, i) => { p.name = 'pernas' + i; });
   return { g, pernas };
 }
 function modeloCoelho() {
@@ -333,7 +362,7 @@ function modeloLobo() {
   const olho = new THREE.MeshBasicMaterial({ color: 0xff2a1a });
   for (const s of [-1, 1]) add(new THREE.SphereGeometry(.055, 6, 5), olho, s * .12, 1.06, 1.1);
   for (const [x, z] of [[-.18, .55], [.18, .55], [-.18, -.5], [.18, -.5]]) { const p = new THREE.Group(); p.position.set(x, .7, z); const l = new THREE.Mesh(new THREE.CylinderGeometry(.06, .045, .7, 6), pel); l.position.y = -.35; p.add(l); c.add(p); pernas.push(p); }
-  g.scale.setScalar(1.15); return { g, c, pernas };
+  c.name = 'c'; pernas.forEach((p, i) => { p.name = 'pernas' + i; }); g.scale.setScalar(1.15); return { g, c, pernas };
 }
 function modeloGolem() {
   const g = new THREE.Group(), c = new THREE.Group(), pernas = [], bracos = []; g.add(c);
@@ -346,9 +375,14 @@ function modeloGolem() {
   for (const s of [-1, 1]) add(new THREE.SphereGeometry(.07, 6, 5), olho, s * .15, 2.88, .4);
   for (const s of [-1, 1]) { const p = new THREE.Group(); p.position.set(s * .95, 2.4, 0); add(new THREE.BoxGeometry(.38, 1.2, .38), pedra2, 0, -.55, 0, p); add(organico(new THREE.DodecahedronGeometry(.32, 0), .3, 30 + s), pedra, 0, -1.2, 0, p); c.add(p); bracos.push(p); }
   for (const s of [-1, 1]) { const p = new THREE.Group(); p.position.set(s * .38, 1.2, 0); add(new THREE.BoxGeometry(.42, 1.2, .42), pedra2, 0, -.6, 0, p); c.add(p); pernas.push(p); }
-  g.scale.setScalar(1.1); return { g, c, pernas, bracos };
+  c.name = 'c'; pernas.forEach((p, i) => { p.name = 'pernas' + i; }); bracos.forEach((p, i) => { p.name = 'bracos' + i; }); g.scale.setScalar(1.1); return { g, c, pernas, bracos };
 }
 
+const _tpl = {};
+function clonaModelo(chave, fabrica) {   // 1 geometria + materiais por espécie; cada animal/criatura é um clone leve
+  const t = _tpl[chave] || (_tpl[chave] = fabrica()), g = t.g.clone(true), nomes = (n) => (t[n] || []).map((_, i) => g.getObjectByName(n + i));
+  return { g, c: g.getObjectByName('c'), pernas: nomes('pernas'), bracos: nomes('bracos') };
+}
 function criarAvatar(nick) {
   const g = new THREE.Group(), mats = {}, M = (k, c) => (mats[k] = new THREE.MeshStandardMaterial({ color: c, roughness: .8 }));
   const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
@@ -547,6 +581,8 @@ export class World {
     this.equipado = 'mao'; this.estoque = 0; this.giro = 0; this.progresso = 0; this.alvo = null; this.estAlvo = null;
     this.swing = 0; this.golpeT = 0; this.atacando = false; this.nearFogueira = false;
     this.vivo = true; this.vida = 100; this.movendo = false; this._passo = 0; this._atkAte = 0; this._fumo = 0; this.cdAtq = 0; this.cdUso = 0; this.dia = 1; this._nome = ''; this._prog = 0;
+    this.nearBancada = false; this.drops = new Map(); this.meuId = null; this.autoQ = false; this.nivelDin = 0; this.fatorDist = 1; this.farAtual = 260; this._fpsT = 0; this._fpsN = 0; this._bom = 0;
+    this.onQualidadeAuto = this.onUsar = this.onPegarDrop = this.onKill = null;
     this.cos = {}; this.hostisMap = new Map(); this.hostisLocal = new Hostis(); this.gHostis = new THREE.Group(); this.scene.add(this.gHostis);
     this.onConsumir = this.onCozinhar = this.onEncher = this.onBeberAgua = this.onDrop = this.onDano = this.onAtacarHostil = null;
     this.ghostOk = false; this.ghostPos = null; this.ghostTipo = null; this.ghostM = null;
@@ -621,7 +657,7 @@ export class World {
     this.maoG.add(modeloItem(id, this.cos?.ferramenta));
   }
   #escalaCeu() {
-    const f = this.Q.far;
+    const f = this.farAtual;
     this.dome.scale.setScalar(f * .96); this.estrelas.scale.setScalar(f * .9);
     this.solM.scale.setScalar(f * .04); this.luaM.scale.setScalar(f * .028);
     this.cam.far = f + 40; this.cam.updateProjectionMatrix();
@@ -636,7 +672,7 @@ export class World {
     U.low.value.copy(U.hor.value).multiplyScalar(.55);
     const fog = this.scene.fog;
     const sub = this.cam.position.y < AGUA + .05 && this.mode === 'play';
-    if (sub) { fog.color.setHex(0x15506e); fog.density = .06; } else { fog.color.copy(U.hor.value); fog.density = this.Q.fog * (1 + (1 - d) * .45); }
+    if (sub) { fog.color.setHex(0x15506e); fog.density = .06; } else { fog.color.copy(U.hor.value); fog.density = this.Q.fog / this.fatorDist * (1 + (1 - d) * .45); }
     const S = this._d.set(Math.cos(a) * .9, e, .35).normalize();
     const foco = this.mode === 'play' ? this.pos : (this._f0 ??= new THREE.Vector3());
     this.sol.position.set(foco.x + S.x * 120, foco.y + S.y * 120, foco.z + S.z * 120); this.sol.target.position.copy(foco);
@@ -644,7 +680,7 @@ export class World {
     this.lua.position.set(foco.x - S.x * 120, foco.y - S.y * 120, foco.z - S.z * 120); this.lua.target.position.copy(foco); this.lua.intensity = e < 0 ? clamp(-e * 1.5, 0, .3) : 0;
     this.hemi.intensity = .14 + .62 * d; this.hemi.color.setHex(0x1a2540).lerp(A.setHex(0xbfdcff), d);
     this.ceuG.position.copy(this.cam.position);
-    const f = this.Q.far;
+    const f = this.farAtual;
     this.solM.position.set(S.x * f * .8, S.y * f * .8, S.z * f * .8); this.luaM.position.set(-S.x * f * .8, -S.y * f * .8, -S.z * f * .8);
     this.solM.visible = e > -.12; this.luaM.visible = e < .12;
     this.estrelas.material.color.setScalar(clamp(1 - d * 1.2, 0, 1)); this.estrelas.visible = d < .85;
@@ -653,7 +689,7 @@ export class World {
 
   /* ---------- qualidade / construção do mundo ---------- */
   setQualidade(q) {
-    this.qAtual = QUALIDADE[q] ? q : 'media'; this.Q = QUALIDADE[this.qAtual];
+    this.qAtual = QUALIDADE[q] ? q : 'media'; this.Q = QUALIDADE[this.qAtual]; this.nivelDin = 0; this.fatorDist = 1; this.farAtual = this.Q.far;
     this.r.setPixelRatio(Math.min(devicePixelRatio, this.Q.pr));
     this.r.shadowMap.enabled = this.Q.sombra; this.r.shadowMap.type = THREE.PCFSoftShadowMap;
     this.sol.castShadow = this.Q.sombra; const ms = this.qAtual === 'alta' ? 2048 : 1024;
@@ -689,29 +725,43 @@ export class World {
     const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, map: this.texChao, roughness: .96, metalness: 0 }));
     m.receiveShadow = true; this.gTerreno.add(m);
   }
+  // instancia em "chunks" de 64 m: cada chunk é um InstancedMesh com esfera de limites própria => frustum culling real
+  #instanciar(geo, mat, itens, sombra, grupo, recebe = true) {
+    geo.computeBoundingSphere(); const gr = geo.boundingSphere.radius, buckets = new Map(), out = new Array(itens.length), meshes = [];
+    itens.forEach((it, i) => { const k = Math.floor(it.x / 64) * 1000 + Math.floor(it.z / 64); let b = buckets.get(k); if (!b) { b = []; buckets.set(k, b); } b.push(i); });
+    for (const idxs of buckets.values()) {
+      const g2 = new THREE.BufferGeometry(); for (const k in geo.attributes) g2.setAttribute(k, geo.attributes[k]); if (geo.index) g2.setIndex(geo.index);
+      let cx = 0, cy = 0, cz = 0; for (const i of idxs) { cx += itens[i].x; cy += itens[i].y; cz += itens[i].z; } cx /= idxs.length; cy /= idxs.length; cz /= idxs.length;
+      let rad = 0; for (const i of idxs) rad = Math.max(rad, Math.hypot(itens[i].x - cx, itens[i].y - cy, itens[i].z - cz));
+      g2.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, cy, cz), rad + gr * 1.6);
+      const m = new THREE.InstancedMesh(g2, mat, idxs.length); m.castShadow = sombra; m.receiveShadow = recebe; m.frustumCulled = true;
+      idxs.forEach((i, j) => { m.setMatrixAt(j, itens[i].matrix); out[i] = { mesh: m, idx: j }; });
+      m.instanceMatrix.needsUpdate = true; grupo.add(m); meshes.push(m);
+    }
+    return { out, meshes };
+  }
   #recursos() {
     const lista = gerarRecursos(this.seed), Q = this.Q;
     this.recursos = []; this.recMap = new Map(); this.grid = new Map(); this.meshesRec = [];
     const matVc = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .95 });
     const matCr = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .35, emissive: 0x0c3a47, emissiveIntensity: 1 });
     const defs = { pino: [geoPino, matVc], carvalho: [geoCarvalho, matVc], rocha: [geoRocha, matVc], ferro: [geoFerro, matVc], cristal: [geoCristal, matCr], fruta: [geoFruta, matVc] };
-    const cont = {}; const chave = r => (r.tipo === 'arvore' ? r.v : r.tipo);
-    for (const r of lista) cont[chave(r)] = (cont[chave(r)] || 0) + 1;
-    const meshes = {};
-    for (const k of Object.keys(cont)) {
-      const m = new THREE.InstancedMesh(defs[k][0](), defs[k][1], cont[k]); m.frustumCulled = false; m.castShadow = Q.sombra; m.receiveShadow = true; m.n = 0;
-      meshes[k] = m; this.meshesRec.push(m); this.gRecursos.add(m);
-    }
-    const d = new THREE.Object3D();
+    const chave = r => (r.tipo === 'arvore' ? r.v : r.tipo), porTipo = {}, d = new THREE.Object3D();
     for (const r of lista) {
-      const m = meshes[chave(r)], e = r.e; d.position.set(r.x, r.y - .06, r.z); d.rotation.set(0, r.r, 0); d.scale.set(e, e, e); d.updateMatrix();
-      const idx = m.n++; m.setMatrixAt(idx, d.matrix);
-      const rec = { id: r.id, tipo: r.tipo, x: r.x, y: r.y, z: r.z, mesh: m, idx, mat: d.matrix.clone(), vivo: true };
-      if (r.tipo === 'arvore') { rec.ay = r.y + .2; rec.vy = 4 * e; rec.rad = .75 * e; rec.col = .45 * e; }
-      else if (r.tipo === 'fruta') { rec.ay = r.y + .4 * e; rec.vy = 0; rec.rad = .95 * e; rec.col = .35 * e; }
-      else { rec.ay = r.y + .55 * e; rec.vy = 0; rec.rad = 1.05 * e; rec.col = .8 * e; }
-      this.recursos.push(rec); this.recMap.set(rec.id, rec);
-      const k = (Math.floor(r.x / 16) + 100) * 1000 + Math.floor(r.z / 16) + 100; let a = this.grid.get(k); if (!a) { a = []; this.grid.set(k, a); } a.push(rec);
+      const e = r.e; d.position.set(r.x, r.y - .06, r.z); d.rotation.set(0, r.r, 0); d.scale.set(e, e, e); d.updateMatrix();
+      const k = chave(r); if (!porTipo[k]) porTipo[k] = []; porTipo[k].push({ r, x: r.x, y: r.y, z: r.z, matrix: d.matrix.clone() });
+    }
+    for (const k of Object.keys(porTipo)) {
+      const itens = porTipo[k], { out, meshes } = this.#instanciar(defs[k][0](), defs[k][1], itens, Q.sombra, this.gRecursos);   // 1 geometria/material por espécie
+      this.meshesRec.push(...meshes);
+      itens.forEach((it, i) => {
+        const r = it.r, e = r.e, rec = { id: r.id, tipo: r.tipo, x: r.x, y: r.y, z: r.z, mesh: out[i].mesh, idx: out[i].idx, mat: it.matrix, vivo: true };
+        if (r.tipo === 'arvore') { rec.ay = r.y + .2; rec.vy = 4 * e; rec.rad = .75 * e; rec.col = .45 * e; }
+        else if (r.tipo === 'fruta') { rec.ay = r.y + .4 * e; rec.vy = 0; rec.rad = .95 * e; rec.col = .35 * e; }
+        else { rec.ay = r.y + .55 * e; rec.vy = 0; rec.rad = 1.05 * e; rec.col = .8 * e; }
+        this.recursos.push(rec); this.recMap.set(rec.id, rec);
+        const gk = (Math.floor(r.x / 16) + 100) * 1000 + Math.floor(r.z / 16) + 100; let a = this.grid.get(gk); if (!a) { a = []; this.grid.set(gk, a); } a.push(rec);
+      });
     }
   }
   #vizinhos(x, z) {
@@ -720,21 +770,24 @@ export class World {
     return out;
   }
   #decor() {
-    const rnd = mulberry32((this.seed + 1) | 0), n = this.Q.dec, d = new THREE.Object3D();
-    const arb = new THREE.InstancedMesh(geoArbusto(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), n); arb.frustumCulled = false; arb.receiveShadow = true;
-    let k = 0;
-    for (let i = 0; i < n * 10 && k < n; i++) {
-      const x = (rnd() - .5) * 440, z = (rnd() - .5) * 440, h = heightAt(x, z, this.seed);
-      if (h < 1.3 || h > 13 || fbm(x * .04, z * .04, (this.seed + 55) | 0, 2) < .42) continue;
-      const e = .6 + rnd() * 1.0; d.position.set(x, h - .05, z); d.rotation.set(0, rnd() * 6.28, 0); d.scale.set(e, e * (.8 + rnd() * .5), e); d.updateMatrix(); arb.setMatrixAt(k++, d.matrix);
+    const rnd = mulberry32((this.seed + 1) | 0), Q = this.Q, d = new THREE.Object3D();
+    const gerar = (n, tent, ok, esc, rot) => {
+      const it = [];
+      for (let i = 0; i < tent && it.length < n; i++) {
+        const x = (rnd() - .5) * 440, z = (rnd() - .5) * 440, h = heightAt(x, z, this.seed); if (!ok(x, z, h)) continue;
+        const [sx, sy, sz] = esc(); d.position.set(x, h - .03, z); d.rotation.set(rot ? rnd() * 3 : 0, rnd() * 6.28, 0); d.scale.set(sx, sy, sz); d.updateMatrix(); it.push({ x, y: h, z, matrix: d.matrix.clone() });
+      }
+      return it;
+    };
+    const mato = (x, z, h) => h > 1.3 && h < 13 && fbm(x * .04, z * .04, (this.seed + 55) | 0, 2) >= .42;
+    const arb = gerar(Q.dec, Q.dec * 10, mato, () => { const e = .6 + rnd(); return [e, e * (.8 + rnd() * .5), e]; });
+    this.#instanciar(geoArbusto(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), arb, false, this.gDecor);
+    const peb = gerar(160, 1280, (x, z, h) => h > .6, () => { const e = .12 + rnd() * .25; return [e * 1.4, e, e * 1.1]; }, true);
+    this.#instanciar(geoRocha(0x8a857b), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), peb, false, this.gDecor);
+    if (Q.grama > 0) {   // tufos de grama (só médio/alto): instanciados e agrupados em chunks
+      const gra = gerar(Q.grama, Q.grama * 6, (x, z, h) => h > 1.4 && h < 9 && fbm(x * .05, z * .05, (this.seed + 77) | 0, 2) >= .38, () => { const e = .8 + rnd() * .7; return [e, e, e]; });
+      this.#instanciar(geoGrama(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }), gra, false, this.gDecor, false);
     }
-    arb.count = k; this.gDecor.add(arb);
-    const nr = 160, peb = new THREE.InstancedMesh(geoRocha(0x8a857b), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }), nr); peb.frustumCulled = false; k = 0;
-    for (let i = 0; i < nr * 8 && k < nr; i++) {
-      const x = (rnd() - .5) * 440, z = (rnd() - .5) * 440, h = heightAt(x, z, this.seed); if (h < .6) continue;
-      const e = .12 + rnd() * .25; d.position.set(x, h - .02, z); d.rotation.set(rnd() * 3, rnd() * 6, 0); d.scale.set(e * 1.4, e, e * 1.1); d.updateMatrix(); peb.setMatrixAt(k++, d.matrix);
-    }
-    peb.count = k; this.gDecor.add(peb);
   }
   #criaFauna() {
     this.fauna = []; const rnd = mulberry32((this.seed + 77) | 0);
@@ -742,7 +795,7 @@ export class World {
       const cervo = i < 14; let x = 0, z = 0, h = 0, ok = false;
       for (let t = 0; t < 60 && !ok; t++) { x = (rnd() - .5) * 400; z = (rnd() - .5) * 400; h = heightAt(x, z, this.seed); ok = h > 1.6 && h < 10 && x * x + z * z > 200; }
       if (!ok) continue;
-      const m = cervo ? modeloCervo() : modeloCoelho(); m.g.position.set(x, h, z); this.gFauna.add(m.g);
+      const m = cervo ? clonaModelo('cervo', modeloCervo) : clonaModelo('coelho', modeloCoelho); m.g.position.set(x, h, z); this.gFauna.add(m.g);
       this.fauna.push({ tipo: cervo ? 'cervo' : 'coelho', g: m.g, pernas: m.pernas, x, y: h, z, yaw: rnd() * 6.28, estado: 'idle', timer: rnd() * 4, dx: 0, dz: 1, fase: 0, hp: cervo ? 24 : 8, morto: false });
     }
   }
@@ -754,7 +807,7 @@ export class World {
     addEventListener('keydown', e => {
       if (e.target.closest?.('input,select,textarea')) return;
       k[e.code] = true; if (e.code === 'Space') { this.input.pulo = true; if (this.mode === 'play') e.preventDefault(); }
-      if (this.mode === 'play' && !this.parado) { if (e.code === 'KeyR') this.girarGhost(); if (e.code === 'KeyF') this.demolirAlvo(); }
+      if (this.mode === 'play' && !this.parado) { if (e.code === 'KeyR') this.girarGhost(); if (e.code === 'KeyF') this.usarAlvo(); if (e.code === 'KeyX') this.demolirAlvo(); }
       tec();
     });
     addEventListener('keyup', e => { k[e.code] = false; if (e.code === 'Space') this.input.pulo = false; tec(); });
@@ -778,6 +831,7 @@ export class World {
     this.input.acao = v;
   }
   girarGhost() { this.giro = (this.giro + 1) % 4; }
+  usarAlvo() { if (!this.estAlvo || PECAS.includes(this.equipado)) return; if (this.estAlvo.tipo === 'bau') this.onUsar?.(this.estAlvo); else this.onDemolir?.(this.estAlvo); }
   demolirAlvo() { if (this.estAlvo && !PECAS.includes(this.equipado)) this.onDemolir?.(this.estAlvo); }
   setEquipado(id, estoque = 0) { this.equipado = id || 'mao'; this.estoque = estoque; this.#trocaMao(this.equipado); }
   setEstoque(n) { this.estoque = n; }
@@ -785,12 +839,12 @@ export class World {
   teleportar(x, z, yaw = 0) { this.pos.set(x, this.groundAt(x, z, 1e9) + 1.75, z); this.yaw = yaw; this.pitch = 0; this.vy = 0; this.noChao = true; }
 
   /* ---------- modos ---------- */
-  setMenu() { this.mode = 'menu'; this.input.acao = false; document.exitPointerLock?.(); this.maoG.visible = false; this.gGhost.visible = false; this.limparHostis(); }
+  setMenu() { this.mode = 'menu'; this.input.acao = false; document.exitPointerLock?.(); this.maoG.visible = false; this.gGhost.visible = false; this.limparHostis(); this.limparDrops(); }
   setPlay(seed, { offline = true, agora = null, pos = null } = {}) {
     if (seed !== this.seed) { this.seed = seed; this.destruidos.clear(); this.#reconstruir(); }
     this.offline = offline;
     this.offsetCeu = agora ? (agora - Date.now()) / 1000 : CICLO * .3 - ((Date.now() / 1000) % CICLO);
-    this.mode = 'play'; this.parado = false; this.maoG.visible = true; this.gGhost.visible = true; this.vivo = true; this.hostisLocal.limpar(); this.limparHostis();
+    this.mode = 'play'; this.parado = false; this.maoG.visible = true; this.gGhost.visible = true; this.vivo = true; this.hostisLocal.limpar(); this.limparHostis(); this.limparDrops();
     const x = pos?.x ?? 0, z = pos?.z ?? 0; this.yaw = pos?.yaw ?? 0; this.pitch = 0; this.vy = 0; this.noChao = true;
     this.pos.set(x, this.groundAt(x, z, 1e9) + 1.75, z); this.#trocaMao(this.equipado);
   }
@@ -805,7 +859,7 @@ export class World {
     for (const id of [...this.estruturas.keys()]) this.removerEstrutura(id);
     for (const e of m.estruturas || []) this.addEstrutura(e);
   }
-  estadoMundo() { return { destruidos: Object.fromEntries(this.destruidos), estruturas: [...this.estruturas.values()].map(({ id, tipo, x, y, z, ry, dono }) => ({ id, tipo, x, y, z, ry, dono: dono || null })) }; }
+  estadoMundo() { return { destruidos: Object.fromEntries(this.destruidos), estruturas: [...this.estruturas.values()].map(({ id, tipo, x, y, z, ry, dono, itens }) => ({ id, tipo, x, y, z, ry, dono: dono || null, ...(itens ? { itens } : {}) })) }; }
   setRecursoVivo(id, vivo) {
     const r = this.recMap.get(id); if (!r) return;
     if (vivo && !r.vivo) { r.vivo = true; r.mesh.setMatrixAt(r.idx, r.mat); r.mesh.instanceMatrix.needsUpdate = true; this.destruidos.delete(id); }
@@ -841,17 +895,24 @@ export class World {
   }
   #colide(x, z, feet) {
     if (x * x + z * z > 228 * 228) return true;
-    const pr = .35;
+    const pr = .3, cab = feet + 1.85;   // raio do jogador e topo da cabeça
     for (const r of this.#vizinhos(x, z)) { if (!r.vivo) continue; const dx = x - r.x, dz = z - r.z, R = r.col + pr; if (dx * dx + dz * dz < R * R) return true; }
     for (const s of this.estruturas.values()) {
       const dx = x - s.x, dz = z - s.z; if (dx * dx + dz * dz > 12) continue;
-      const c = Math.cos(s.ry), sn = Math.sin(s.ry), lx = dx * c - dz * sn, lz = dx * sn + dz * c;
-      if (s.tipo === 'parede') { if (Math.abs(lx) < 2 + pr && Math.abs(lz) < .125 + pr && feet < s.y + 2.7) return true; }
-      else if (s.tipo === 'fundacao') { if (Math.abs(lx) < 2 && Math.abs(lz) < 2 && s.y > feet + .95) return true; }
-      else if (s.tipo === 'rampa') { if (Math.abs(lx) < 2 && Math.abs(lz) < 2 && s.y + (lz + 2) * .5 + .1 > feet + .95) return true; }
-      else if (s.tipo === 'bancada') { if (Math.abs(lx) < .8 + pr && Math.abs(lz) < .45 + pr && feet < s.y + .9) return true; }
-      else if (s.tipo === 'cama') { if (Math.abs(lx) < .55 + pr && Math.abs(lz) < 1 + pr && feet < s.y + .5) return true; }
-      else if (s.tipo === 'fogueira') { if (dx * dx + dz * dz < (.45 + pr) ** 2 && feet < s.y + .3) return true; }
+      const c = Math.cos(s.ry), sn = Math.sin(s.ry), lx = dx * c - dz * sn, lz = dx * sn + dz * c, ax = Math.abs(lx), az = Math.abs(lz), topo = s.y + H_PAREDE - .3;
+      switch (s.tipo) {
+        case 'parede': if (ax < 2 + pr && az < .125 + pr && feet < topo) return true; break;
+        case 'porta':
+          if (az < .125 + pr && ax < 2 + pr) { if (ax > .7 - pr) { if (feet < topo) return true; } else if (cab > s.y + 2.3 && feet < topo) return true; }   // batentes e verga
+          break;
+        case 'fundacao': if (ax < 2 && az < 2 && s.y > feet + .95) return true; break;
+        case 'rampa': if (ax < 2 && az < 2) { const ys = s.y + (lz + 2) * .5 + .1; if (ys > feet + .95 && ys - .35 < cab) return true; } break;   // só bloqueia se a laje cruza o corpo
+        case 'bancada': if (ax < .8 + pr && az < .45 + pr && feet < s.y + .9) return true; break;
+        case 'bau': if (ax < .55 + pr && az < .4 + pr && feet < s.y + .75) return true; break;
+        case 'totem': if (dx * dx + dz * dz < (.45 + pr) ** 2 && feet < s.y + 2.4) return true; break;
+        case 'cama': if (ax < .55 + pr && az < 1 + pr && feet < s.y + .5) return true; break;
+        case 'fogueira': if (dx * dx + dz * dz < (.45 + pr) ** 2 && feet < s.y + .3) return true; break;
+      }
     }
     return false;
   }
@@ -859,7 +920,10 @@ export class World {
     if (!dx && !dz) return; let px = this.pos.x, pz = this.pos.z;
     const tenta = (nx, nz) => {
       const f = this.pos.y - 1.7; if (this.#colide(nx, nz, f)) return false;
-      if (this.noChao) { const g1 = this.groundAt(px, pz, f + .95), g2 = this.groundAt(nx, nz, f + .95), st = Math.hypot(nx - px, nz - pz) || 1e-6; if (g2 - g1 > 0 && (g2 - g1) / st > 1.8) return false; }
+      if (this.noChao) {   // degraus de até ~0,7 m (fundações, pedras) sobem andando; paredões mais altos exigem pulo
+        const l = Math.hypot(nx - px, nz - pz) || 1e-6, ux = (nx - px) / l, uz = (nz - pz) / l;
+        if (this.groundAt(px + ux * .5, pz + uz * .5, f + .95) - this.groundAt(px, pz, f + .95) > .7) return false;
+      }
       px = nx; pz = nz; return true;
     };
     if (!tenta(px + dx, pz + dz)) { tenta(px + dx, pz); tenta(px, pz + dz); }
@@ -985,7 +1049,7 @@ export class World {
       if (d < md) { md = d; melhor = { ref, tipo }; }
     };
     for (const h of this.hostisMap.values()) teste(h.g.position.x, h.g.position.z, h, 'hostil', h.k === 'golem' ? .8 : .4);
-    for (const a of this.fauna) if (!a.morto && a.g.visible) teste(a.x, a.z, a, 'fauna', a.tipo === 'cervo' ? .5 : .1);
+    for (const a of this.fauna) if (!a.morto) teste(a.x, a.z, a, 'fauna', a.tipo === 'cervo' ? .5 : .1);
     return melhor;
   }
   #acertar(alvo, dano) {
@@ -1000,7 +1064,7 @@ export class World {
   }
   #danoHostilLocal(id, dano) {
     const r = this.hostisLocal.danificar(id, dano); if (!r) return;
-    if (r.morto) { this.onDrop?.(r.drops); this.setHostis(this.hostisLocal.snapshot()); }
+    if (r.morto) { this.onKill?.(); this.onDrop?.(r.drops); this.setHostis(this.hostisLocal.snapshot()); }
   }
   #golpe(r, t) {
     const d = this._d, o = this.cam.position, cat = RECURSOS[r.tipo].cat;
@@ -1045,7 +1109,7 @@ export class World {
       const c = Math.cos(ys), sn = Math.sin(ys), h = cantos.map(([cx, cz]) => this.groundAt(a.x + c * cx + sn * cz, a.z - sn * cx + c * cz, 1e9)), mx = Math.max(...h), mn = Math.min(...h);
       return { x: a.x, z: a.z, y: mx + .3, ry: ys, incB: mx + .3 - mn, incC: -.3 };
     }
-    if (tipo === 'parede') {
+    if (tipo === 'parede' || tipo === 'porta') {
       const F = prox(fund, 7);
       if (F) { // encaixa na borda mais próxima da fundação
         let best = null, bd = 1e9;
@@ -1056,8 +1120,8 @@ export class World {
       return { x: a.x, z: a.z, y: Math.max(g1, g2), ry: ys, incB: Math.abs(g1 - g2), incC: 0 };
     }
     if (tipo === 'rampa') {
-      const W = prox(est.filter(s => s.tipo === 'parede'), 4.5);
-      if (W) { const [, lz] = loc(W, a.x, a.z), sg = lz >= 0 ? 1 : -1, dx = Math.sin(W.ry) * sg, dz = Math.cos(W.ry) * sg; return { x: W.x + dx * 2, z: W.z + dz * 2, y: W.y + 3, ry: Math.atan2(dx, dz), ...base }; } // telhado a partir do topo da parede
+      const W = prox(est.filter(s => PAREDES.has(s.tipo)), 4.5);
+      if (W) { const [, lz] = loc(W, a.x, a.z), sg = lz >= 0 ? 1 : -1, dx = Math.sin(W.ry) * sg, dz = Math.cos(W.ry) * sg; return { x: W.x + dx * 2, z: W.z + dz * 2, y: W.y + H_PAREDE, ry: Math.atan2(dx, dz), ...base }; } // telhado a partir do topo da parede
       const F = prox(fund, 4);
       if (F) { const [lx, lz] = loc(F, a.x, a.z); if (Math.abs(lx) < 2.2 && Math.abs(lz) < 2.2) return { x: F.x, z: F.z, y: F.y, ry: ys, ...base }; }
       return { x: a.x, z: a.z, y: this.groundAt(a.x - Math.sin(ys) * 2, a.z - Math.cos(ys) * 2, 1e9), ry: ys, ...base };
@@ -1069,11 +1133,14 @@ export class World {
     const dx = p.x - this.pos.x, dz = p.z - this.pos.z; if (dx * dx + dz * dz > 121) return false;
     if (this.estruturas.size >= 600 || p.y < .35) return false;
     if (p.incB > (tipo === 'fundacao' ? 1.6 : 1.2) || p.incC > .7) return false;
-    const mind = { fundacao: 3.4, parede: .6, rampa: 3, bancada: 1.3, fogueira: 1.3, cama: 1.6 }[tipo];
-    for (const s of this.estruturas.values()) { if (s.tipo === tipo && (s.x - p.x) ** 2 + (s.z - p.z) ** 2 < mind * mind && Math.abs(s.y - p.y) < 2.5) return false; }
-    const ext = { fundacao: [2, 2], parede: [2, .15], rampa: [2, 2], bancada: [.8, .45], fogueira: [.5, .5], cama: [.55, 1] }[tipo], c = Math.cos(p.ry), sn = Math.sin(p.ry);
+    const mind = { fundacao: 3.4, parede: .6, porta: .6, rampa: 3, bancada: 1.3, bau: 1.2, totem: 2.5, fogueira: 1.3, cama: 1.6 }[tipo];
+    for (const s of this.estruturas.values()) { if ((s.tipo === tipo || (PAREDES.has(s.tipo) && PAREDES.has(tipo))) && (s.x - p.x) ** 2 + (s.z - p.z) ** 2 < mind * mind && Math.abs(s.y - p.y) < 2.5) return false; }
+    const ext = { fundacao: [2, 2], parede: [2, .15], porta: [2, .15], rampa: [2, 2], bancada: [.8, .45], bau: [.55, .4], totem: [.4, .4], fogueira: [.5, .5], cama: [.55, 1] }[tipo], c = Math.cos(p.ry), sn = Math.sin(p.ry);
     for (const r of this.#vizinhos(p.x, p.z)) { if (!r.vivo) continue; const ddx = r.x - p.x, ddz = r.z - p.z, lx = ddx * c - ddz * sn, lz = ddx * sn + ddz * c; if (Math.abs(lx) < ext[0] + r.col && Math.abs(lz) < ext[1] + r.col) return false; }
-    if (tipo !== 'fundacao') { const px = this.pos.x - p.x, pz = this.pos.z - p.z, lx = px * c - pz * sn, lz = px * sn + pz * c; if (Math.abs(lx) < ext[0] + .45 && Math.abs(lz) < ext[1] + .45 && this.pos.y - 1.7 < p.y + 1) return false; }
+    if (tipo !== 'fundacao') {   // não prende o jogador: só invalida se a peça cruzar o corpo dele (um teto acima da cabeça é válido)
+      const alt = { parede: H_PAREDE, porta: H_PAREDE, rampa: 2.4, bancada: 1, bau: .8, totem: 2.4, fogueira: .4, cama: .6 }[tipo], px = this.pos.x - p.x, pz = this.pos.z - p.z, lx = px * c - pz * sn, lz = px * sn + pz * c, feet = this.pos.y - 1.7;
+      if (Math.abs(lx) < ext[0] + .4 && Math.abs(lz) < ext[1] + .4 && feet < p.y + alt && feet + 1.85 > p.y - (tipo === 'rampa' ? .35 : 0)) return false;
+    }
     return true;
   }
   #ghost() {
@@ -1097,19 +1164,20 @@ export class World {
   #hud() {
     const constr = PECAS.includes(this.equipado); let nome = this._nome, prog = this._prog, dica = this._dica;
     if (constr) { nome = ''; prog = 0; dica = this.estoque <= 0 ? 'Sem peças — fabrique no inventário (E)' : this.ghostOk ? 'Construir: clique / botão de ação · R gira' : 'Local inválido'; }
-    else if (!nome && !dica && this.estAlvo) dica = 'F / 🗑 demolir ' + ITENS[this.estAlvo.tipo].nome;
-    const key = nome + '|' + prog + '|' + dica + '|' + constr + '|' + !!this.estAlvo;
-    if (key !== this._hud) { this._hud = key; this.onHud?.({ alvo: nome, prog, dica, construindo: constr, demolivel: !!this.estAlvo && !constr }); }
+    else if (!nome && !dica && this.estAlvo) dica = this.estAlvo.tipo === 'bau' ? 'F / ✋ abrir baú · X demolir' : 'X / 🗑 demolir ' + ITENS[this.estAlvo.tipo].nome;
+    const key = nome + '|' + prog + '|' + dica + '|' + constr + '|' + (this.estAlvo?.tipo || '');
+    if (key !== this._hud) { this._hud = key; this.onHud?.({ alvo: nome, prog, dica, construindo: constr, demolivel: !!this.estAlvo && !constr, usavel: !!this.estAlvo && this.estAlvo.tipo === 'bau' && !constr }); }
   }
 
   /* ---------- fogueiras (luz, partículas, regeneração) ---------- */
   #fogo(dt) {
-    const P = this.pos, fs = []; let nf = 1e9;
+    const P = this.pos, fs = []; let nf = 1e9, nb = 1e9;
     for (const s of this.estruturas.values()) {
       const dx = s.x - P.x, dz = s.z - P.z, d2 = dx * dx + dz * dz;
+      if (s.tipo === 'bancada' && d2 < nb) nb = d2;
       if (s.tipo === 'fogueira') { fs.push([d2, s]); if (d2 < nf) nf = d2; if (s.mesh.userData.chamas) { const f = .8 + .35 * Math.sin(this.t * 13 + s.x) + Math.random() * .1; s.mesh.userData.chamas[0].scale.set(1, f, 1); s.mesh.userData.chamas[1].scale.set(1, f * 1.1, 1); } }
     }
-    this.nearFogueira = this.mode === 'play' && nf < 36;
+    this.nearFogueira = this.mode === 'play' && nf < 36; this.nearBancada = this.mode === 'play' && nb < 36;
     fs.sort((a, b) => a[0] - b[0]);
     for (let i = 0; i < 3; i++) { const l = this.luzesF[i], f = fs[i]; if (f && f[0] < 6400) { l.position.set(f[1].x, f[1].y + 1, f[1].z); l.intensity = 1.7 + Math.random() * .5; } else l.intensity = 0; }
     this._fumo -= dt;
@@ -1123,7 +1191,7 @@ export class World {
     const P = this.pos;
     for (const a of this.fauna) {
       if (a.morto) { if (Date.now() > a.volta) this.#reposFauna(a); continue; }
-      const dx = a.x - P.x, dz = a.z - P.z, d2 = dx * dx + dz * dz; if (d2 > 140 * 140) continue;
+      const dx = a.x - P.x, dz = a.z - P.z, d2 = dx * dx + dz * dz; a.g.visible = d2 < this.farAtual ** 2; if (d2 > 140 * 140) continue;
       const d = Math.sqrt(d2), cervo = a.tipo === 'cervo', susto = cervo ? 15 : 10; let mov = 0;
       if (this.mode === 'play' && d < susto) { a.estado = 'fugir'; const l = d || 1; a.dx = dx / l; a.dz = dz / l; }
       else if (a.estado === 'fugir' && d > susto + 8) { a.estado = 'idle'; a.timer = 1 + Math.random() * 2; }
@@ -1142,9 +1210,52 @@ export class World {
   }
 
   /* ---------- jogadores remotos ---------- */
+  /* ---------- mochilas dropadas ao morrer (marcador luminoso temporário) ---------- */
+  addDrop(d) {
+    if (this.drops.has(d.id)) return;
+    const g = new THREE.Group(), mt = (c, r = .9) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+    const bolsa = new THREE.Mesh(new THREE.BoxGeometry(.55, .42, .38), mt(0x8a5a2b)); bolsa.position.y = .25; g.add(bolsa);
+    const cinta = new THREE.Mesh(new THREE.BoxGeometry(.58, .08, .42), mt(0xd9b14a, .6)); cinta.position.y = .36; g.add(cinta);
+    const feixe = new THREE.Mesh(new THREE.CylinderGeometry(.12, .2, 16, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); feixe.position.y = 8; g.add(feixe);
+    const y = this.groundAt(d.x, d.z, 1e9); g.position.set(d.x, y, d.z); this.scene.add(g);
+    this.drops.set(d.id, { ...d, y, g, bolsa, feixe, pedido: 0 });
+  }
+  removeDrop(id) { const d = this.drops.get(id); if (!d) return; this.scene.remove(d.g); this.drops.delete(id); }
+  limparDrops() { for (const d of this.drops.values()) this.scene.remove(d.g); this.drops.clear(); }
+  #dropsUpdate(dt) {
+    if (!this.drops.size) return; const agora = Date.now(), pn = performance.now();
+    for (const d of [...this.drops.values()]) {
+      if (agora > d.expiraEm) { this.removeDrop(d.id); continue; }
+      d.bolsa.rotation.y += dt * 1.2; d.bolsa.position.y = .25 + Math.sin(this.t * 2) * .05; d.feixe.material.opacity = .25 + .15 * Math.sin(this.t * 3);
+      if (this.mode === 'play' && !this.parado && this.vivo && pn > d.pedido) {
+        const dx = d.x - this.pos.x, dz = d.z - this.pos.z;
+        if (dx * dx + dz * dz < 2.6 * 2.6 && (d.dono === this.meuId || agora >= d.libEm)) { d.pedido = pn + 2500; this.onPegarDrop?.(d); }
+      }
+    }
+  }
+  // ajuste automático de qualidade por FPS (só distância de visão, resolução e sombras — sem reconstruir o mundo)
+  #governador(dt) {
+    if (!this.autoQ || this.mode !== 'play' || this.parado) { this._fpsT = 0; this._fpsN = 0; return; }
+    this._fpsT += dt; this._fpsN++; if (this._fpsT < 4) return;
+    const fps = this._fpsN / this._fpsT; this._fpsT = 0; this._fpsN = 0;
+    if (fps < 38 && this.nivelDin < 2) { this.nivelDin++; this.#aplicaNivel(); this._bom = 0; this.onQualidadeAuto?.(this.nivelDin); }
+    else if (fps > 57 && this.nivelDin > 0) { if (++this._bom >= 3) { this.nivelDin--; this.#aplicaNivel(); this._bom = 0; this.onQualidadeAuto?.(this.nivelDin); } }
+    else this._bom = 0;
+  }
+  #aplicaNivel() {
+    const n = this.nivelDin, Q = this.Q; this.fatorDist = [1, .75, .55][n]; this.farAtual = Q.far * this.fatorDist;
+    this.r.setPixelRatio(Math.max(.75, Math.min(devicePixelRatio, Q.pr) * [1, .8, .65][n]));
+    if (Q.sombra) {
+      const base = this.qAtual === 'alta' ? 2048 : 1024, ms = n === 0 ? base : 512;
+      if (this.sol.shadow.mapSize.x !== ms) { this.sol.shadow.mapSize.set(ms, ms); this.sol.shadow.map?.dispose(); this.sol.shadow.map = null; }
+      this.sol.castShadow = n < 2;
+    }
+    this.#escalaCeu();
+  }
+
   /* ---------- criaturas hostis (Fase 3) ---------- */
   #criaHostil(id, k) {
-    const m = k === 'lobo' ? modeloLobo() : modeloGolem(), g = m.g, topo = k === 'lobo' ? 1.75 : 3.6;
+    const m = k === 'lobo' ? clonaModelo('lobo', modeloLobo) : clonaModelo('golem', modeloGolem), g = m.g, topo = k === 'lobo' ? 1.75 : 3.6;
     const bg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x000000, transparent: true, opacity: .55, depthTest: false, fog: false })), fg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xff5a4a, depthTest: false, fog: false }));
     bg.scale.set(1.2, .1, 1); fg.scale.set(1.2, .1, 1); bg.position.y = fg.position.y = topo; bg.renderOrder = 5; fg.renderOrder = 6; bg.visible = fg.visible = false; g.add(bg, fg);
     g.traverse(o => { if (o.isMesh) o.castShadow = this.Q.sombra; });
@@ -1165,7 +1276,7 @@ export class World {
   #hostisUpdate(dt) {
     if (this.mode === 'play' && this.offline && !this.parado) {   // offline: simulação local (online: snapshots do servidor)
       const fog = [], par = [];
-      for (const s of this.estruturas.values()) { if (s.tipo === 'fogueira') fog.push(s); else if (s.tipo === 'parede') par.push(s); }
+      for (const s of this.estruturas.values()) { if (s.tipo === 'fogueira') fog.push(s); else if (PAREDES.has(s.tipo)) par.push(s); }
       this.hostisLocal.update(dt, {
         jogadores: [{ id: 'eu', x: this.pos.x, z: this.pos.z, vivo: this.vivo }], fogueiras: fog, paredes: par, noite: ehNoite(this.fase),
         ataque: (id, dano, k) => { if (this.vivo) this.onDano?.(dano, k); }, sumiu: () => {},
@@ -1243,7 +1354,7 @@ export class World {
       this.maoG.rotation.set(-.35 - Math.sin((1 - this.swing) * Math.PI) * (this.swing > 0 ? 1 : 0) * 1.0, .25, 0);
       this.maoG.position.y = -.34 + Math.sin(this.t * 2) * .004;
     }
-    this.#atualizaCeu(); this.#faunaUpdate(dt); this.#remotosUpdate(dt); this.#hostisUpdate(dt); this.#fogo(dt); this.#efeitosUpdate(dt); this.#ambUpdate(dt); this.part.update(dt); this.fumaca.update(dt);
+    this.#atualizaCeu(); this.#faunaUpdate(dt); this.#remotosUpdate(dt); this.#hostisUpdate(dt); this.#fogo(dt); this.#efeitosUpdate(dt); this.#ambUpdate(dt); this.part.update(dt); this.fumaca.update(dt); this.#dropsUpdate(dt); this.#governador(dt);
     this._resp -= dt; if (this._resp <= 0) { this._resp = 1; this.#respawnLocal(); }
     this.r.render(this.scene, this.cam);
   }

@@ -22,7 +22,7 @@ export class Hostis {
     for (const p of paredes) {
       const dx = x - p.x, dz = z - p.z; if (dx * dx + dz * dz > 9) continue;
       const c = Math.cos(p.ry), s = Math.sin(p.ry), lx = dx * c - dz * s, lz = dx * s + dz * c;
-      if (Math.abs(lx) < 2.2 && Math.abs(lz) < .65) return true;
+      if (Math.abs(lx) < 2.2 && Math.abs(lz) < .65 && (p.tipo !== 'porta' || Math.abs(lx) > .9)) return true;   // porta: só os batentes bloqueiam
     }
     return false;
   }
