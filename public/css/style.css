@@ -115,3 +115,25 @@ h3{margin:1em 0 .2em;color:var(--verde)}h4{margin:.8em 0 .4em;opacity:.9}
 .loja-card small{opacity:.75;text-transform:capitalize}.loja-card .btn{margin-top:.3em}
 .chips{display:flex;gap:.3em;height:2.4em}.chips i{flex:1;border-radius:8px;border:1px solid rgba(255,255,255,.25)}
 .r-raro{border-color:#4aa8ff}.r-epico{border-color:#b46bff}.r-lendario{border-color:#ffd24a;box-shadow:0 0 12px rgba(255,210,74,.35)}.r-incomum{border-color:#5fbf6a}
+
+/* ---------- Fase 4: YouTube, chat, minimapa, baú, placar, tutorial ---------- */
+a.btn{text-decoration:none;display:inline-block;text-align:center}
+.btn.yt{background:linear-gradient(135deg,#d62828,#8f1010);border-color:transparent;font-weight:700}
+#minimapa{position:absolute;top:calc(max(10px,env(safe-area-inset-top)) + 3em);right:max(10px,env(safe-area-inset-right));border-radius:50%;pointer-events:none!important;box-shadow:0 2px 12px rgba(0,0,0,.5)}
+#chat{position:absolute;left:max(10px,env(safe-area-inset-left));bottom:calc(max(10px,env(safe-area-inset-bottom)) + 4.4em);width:min(46vw,24em);display:flex;flex-direction:column;gap:.3em;pointer-events:none!important}
+#chat-log{max-height:7.5em;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;font-size:.82em;text-shadow:0 1px 3px #000}
+#chat.aberto #chat-log{max-height:12em;overflow-y:auto;pointer-events:auto!important;background:rgba(0,0,0,.45);border-radius:10px;padding:.3em .5em}
+#chat-log .msg{padding:.08em .4em;background:rgba(0,0,0,.35);border-radius:6px;margin-top:2px;word-break:break-word}
+#chat-log .msg.sys{color:#ffe27a}#chat-log .msg.velho{display:none}
+#chat-linha{display:none;gap:.3em;pointer-events:auto!important}#chat.aberto #chat-linha{display:flex}#chat-linha input{flex:1;min-width:0}
+#dica-ctx{position:absolute;bottom:calc(max(10px,env(safe-area-inset-bottom)) + 4.6em);left:50%;transform:translateX(-50%);background:rgba(20,40,60,.88);border:1px solid #4aa8ff;border-radius:12px;padding:.5em 1em;max-width:min(92vw,34em);text-align:center;pointer-events:none!important}
+#bau{position:absolute;inset:0;z-index:12;background:rgba(0,0,0,.6);display:grid;place-items:center;padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+#placar{position:absolute;inset:0;z-index:11;display:grid;place-items:center;pointer-events:none!important;background:rgba(0,0,0,.35)}
+#placar .painel{max-width:40em;margin:0}
+#placar table{width:100%;border-collapse:collapse}#placar th,#placar td{padding:.3em .6em;text-align:left;border-bottom:1px solid var(--borda)}
+#placar tr.eu td{color:var(--verde);font-weight:700}#placar tr.morto td{opacity:.5;text-decoration:line-through}
+#tutorial{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.65);display:grid;place-items:center;padding:12px}
+#tutorial .painel{display:flex;flex-direction:column;gap:.4em;max-width:34em;margin:0}#tutorial ul{margin:.3em 0;padding-left:1.1em;display:flex;flex-direction:column;gap:.35em}
+.acao.lado3{right:max(190px,calc(env(safe-area-inset-right) + 180px));bottom:max(190px,calc(env(safe-area-inset-bottom) + 180px));width:3.6em;height:3.6em;font-size:1.2em;background:rgba(255,200,60,.45)}
+@media (pointer:coarse){#chat{bottom:calc(max(10px,env(safe-area-inset-bottom)) + 11.5em);width:min(40vw,18em)}#chat-log{max-height:5em}}
+@media (max-height:480px){#minimapa{top:calc(max(10px,env(safe-area-inset-top)) + 2.6em)}}
