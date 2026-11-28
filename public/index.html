@@ -25,11 +25,12 @@
     <div class="menu">
       <button data-ir="modos" class="btn primario">▶ Jogar</button>
       <button id="btn-loja-inicio" class="btn">🛒 Loja de Diamantes</button>
+      <a class="btn yt" href="https://www.youtube.com/@CAPUDINHOGAMES7" target="_blank" rel="noopener noreferrer">▶ Siga o criador no YouTube</a>
       <button data-ir="opcoes" class="btn">⚙ Opções</button>
       <button id="btn-tela-cheia" class="btn">⛶ Tela cheia</button>
     </div>
   </div>
-  <small class="versao">v0.003</small>
+  <small class="versao">v0.004</small>
 </section>
 
 <!-- MODOS -->
@@ -83,6 +84,9 @@
     <label>Geral <input type="range" id="o-vg" min="0" max="1" step="0.05"></label>
     <label>Música / ambiente <input type="range" id="o-vm" min="0" max="1" step="0.05"></label>
     <label>Efeitos <input type="range" id="o-ve" min="0" max="1" step="0.05"></label>
+    <h3>Ajuda</h3>
+    <label class="chk"><input type="checkbox" id="o-dicas"> Dicas contextuais durante o jogo</label>
+    <button id="btn-ver-tut" class="btn mini">Rever tutorial</button>
     <button id="btn-salvar-opcoes" class="btn primario">Salvar</button>
   </div>
 </section>
@@ -108,6 +112,8 @@
     <span id="hud-hora">☀️ 08:00</span>
     <span id="hud-fogo" class="oculto">🔥 Aquecendo</span>
     <button class="btn mini" id="btn-salvar" title="Salvar (G)">💾</button>
+    <button class="btn mini" id="btn-chat" title="Chat (Enter)">💬</button>
+    <button class="btn mini" id="btn-placar" title="Placar (Tab)">📋</button>
     <button class="btn mini" id="btn-loja" title="Loja (L)">🛒</button>
     <button class="btn mini" id="btn-constr" title="Construir (B)">🏗</button>
     <button class="btn mini" id="btn-mochila" title="Inventário (E)">🎒</button>
@@ -123,6 +129,27 @@
   <div id="dica" class="oculto"></div>
   <div id="toast"></div>
   <div id="dano-fx"></div>
+  <canvas id="minimapa" width="112" height="112"></canvas>
+  <div id="chat">
+    <div id="chat-log"></div>
+    <div id="chat-linha"><input id="chat-input" maxlength="160" placeholder="Mensagem… (/ajuda)" autocomplete="off"><button class="btn mini" id="chat-enviar">➤</button></div>
+  </div>
+  <div id="dica-ctx" class="oculto"></div>
+  <div id="bau" class="oculto">
+    <div class="painel inv-painel">
+      <div class="inv-topo"><h3>📦 Baú de Madeira</h3><label class="chk"><input type="checkbox" id="bau-tudo"> Mover tudo</label><button class="btn mini" id="btn-fechar-bau">✕</button></div>
+      <div class="inv-corpo">
+        <div class="inv-col"><h4>Mochila <small>(toque para guardar)</small></h4><div id="bau-minha" class="itens"></div></div>
+        <div class="inv-col"><h4>Baú <small id="bau-cont"></small> <small>(toque para retirar)</small></h4><div id="bau-itens" class="itens"></div></div>
+      </div>
+    </div>
+  </div>
+  <div id="placar" class="oculto">
+    <div class="painel">
+      <h3>📋 Placar da Sala</h3>
+      <table><thead><tr><th>Jogador</th><th>Título / Skin</th><th>Vivo há</th><th>Abates</th><th>Mortes</th></tr></thead><tbody id="placar-corpo"></tbody></table>
+    </div>
+  </div>
   <div id="morte" class="oculto">
     <div class="painel">
       <h3>☠ Você morreu</h3>
@@ -141,6 +168,7 @@
     <button id="btn-pulo" class="acao pulo">⤒</button>
     <button id="btn-girar" class="acao lado oculto">⟳</button>
     <button id="btn-demolir" class="acao lado2 oculto">🗑</button>
+    <button id="btn-usar" class="acao lado3 oculto">✋</button>
   </div>
 
   <!-- INVENTÁRIO / CRAFTING (tecla E) -->
@@ -173,6 +201,15 @@
     </div>
   </div>
 </section>
+
+<div id="tutorial" class="oculto">
+  <div class="painel">
+    <h3>🎮 Como jogar</h3>
+    <ul id="tut-lista"></ul>
+    <label class="chk"><input type="checkbox" id="tut-nao"> Não mostrar novamente</label>
+    <button class="btn primario" id="btn-tut-ok">Entendi</button>
+  </div>
+</div>
 
 <div id="girar" class="oculto">Gire o aparelho para a horizontal ↻</div>
 
